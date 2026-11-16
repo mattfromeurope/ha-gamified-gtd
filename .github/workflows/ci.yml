@@ -1,0 +1,49 @@
+# CI for ha-gamified-gtd: runs on every push to main and on every pull request.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # Integration metadata validation: manifest, hacs.json, services.yaml <-> const.py,
+  # strings/translations consistency, all Python files compile.
+  validate:
+    name: Validate integration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run validation script
+        run: python scripts/validate_integration.py
+
+  # Unit tests for the pure FNV gamification logic (XP curve, skills, perks, ...).
+  test:
+    name: Unit tests (gamification)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pytest
+        run: pip install pytest
+      - name: Run tests
+        run: python -m pytest tests/ -q
+
+  # Frontend: syntax-check the custom card module (ES module -> node --check).
+  frontend:
+    name: Card JS syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: node --check cards module
+        run: |
+          cp custom_components/gamified_gtd/www/gamified-gtd-cards.js /tmp/cards.mjs
+          node --check /tmp/cards.mjs
