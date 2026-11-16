@@ -68,13 +68,15 @@ def _base_schema(hass, defaults: dict[str, Any] | None = None) -> vol.Schema:
                     mode=selector.SelectSelectorMode.DROPDOWN,
                 )
             ),
+            # NOTE: SelectOptionDict values must be strings (int values raise
+            # voluptuous errors -> frontend 400). The manager coerces to int.
             vol.Required(
-                CONF_LEVEL_CAP, default=defaults.get(CONF_LEVEL_CAP, DEFAULT_LEVEL_CAP)
+                CONF_LEVEL_CAP, default=str(defaults.get(CONF_LEVEL_CAP, DEFAULT_LEVEL_CAP))
             ): selector.SelectSelector(
                 selector.SelectSelectorConfig(
                     options=[
-                        selector.SelectOptionDict(value=30, label="30 (base game)"),
-                        selector.SelectOptionDict(value=50, label="50 (all DLCs)"),
+                        selector.SelectOptionDict(value="30", label="30 (base game)"),
+                        selector.SelectOptionDict(value="50", label="50 (all DLCs)"),
                     ]
                 )
             ),
