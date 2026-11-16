@@ -31,32 +31,12 @@ PLATFORMS = ["todo", "sensor"]
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     """Set up once per Home Assistant start (not per config entry).
 
-    Registers the static path for the card JS / user icons and adds the card module to
-    the frontend's extra JS URLs (versioned to bust the browser cache). Also registers
-    the LLM tool set for conversation agents. Both are best-effort: the backend works
-    even if the frontend/LLM registration fails.
+    Registers the static path for the card JS / user icons, adds the card module to
+    the frontend's extra JS URLs, and registers the LLM tool set for conversation
+    agents. Everything frontend/LLM related is best-effort: the backend works even
+    if that registration fails.
     """
-    www_dir = os.path.join(os.path.dirname(__file__), "www")
-    # Serve www/ under /gamified_gtd_static (cards JS + optional user icons).
-    # NOTE: the singular hass.http.async_register_static_path was removed in newer
-    # HA versions (breaks in 2025.7) — use the plural async API with a fallback.
-    if hasattr(hass.http, "async_register_static_paths"):
-        from homeassistant.components.http import StaticPathConfig
-
-        await hass.http.async_register_static_paths(
-            [StaticPathConfig(f"/{DOMAIN}_static", www_dir)]
-        )
-    else:  # older HA versions
-        hass.http.async_register_static_path(f"/{DOMAIN}_static", www_dir)
-    with open(os.path.join(os.path.dirname(__file__), "manifest.json"), encoding="utf-8") as f:
-        version = json.load(f).get("version", "0.0.0")
-    try:
-        from homeassistant.components.frontend import add_extra_js_url
-
-        # ?v=<version> forces a reload of the card JS after updates.
-        add_extra_js_url(hass, f"/{DOMAIN}_static/gamified-gtd-cards.js?v={version}")
-    except Exception as err:  # noqa: BLE001 - card is optional, backend must still work
-        _LOGGER.warning("Could not register custom cards JS: %s", err)
+    await _async_register_frontend_assets(hass)
     try:
         from homeassistant.helpers import llm
 
@@ -69,12 +49,63 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     return True
 
 
+async def _async_register_frontend_assets(hass: HomeAssistant) -> None:
+    """Serve www/ and register the card module with the frontend (idempotent).
+
+    Two things are needed before the custom cards can load:
+    1. a static path, so that /gamified_gtd_static/gamified-gtd-cards.js returns 200
+       (cards JS + vendored lit fallback + the user icon drop-in folder);
+    2. the card module added to the frontend's "extra module url" set
+       (frontend.DATA_EXTRA_MODULE_URL) — HA's index.html dynamically imports every
+       URL in that set on page load. ?v=<manifest version> busts the browser cache
+       (the static path sends long-lived cache headers) after updates.
+
+    Called from BOTH async_setup and async_setup_entry: the domain-level async_setup
+    only runs when the first config entry is set up, and calling it in both places
+    guarantees the URL is present before the next page load regardless of setup
+    order differences between HA versions. A failure here must never break the
+    backend, so everything is best-effort and only logs a warning.
+    """
+    data = hass.data.setdefault(DOMAIN, {})
+    if data.get("_frontend_assets_registered"):
+        return  # already done in this HA process — register only once
+    data["_frontend_assets_registered"] = True
+    www_dir = os.path.join(os.path.dirname(__file__), "www")
+    try:
+        # Serve www/ under /gamified_gtd_static (cards JS + optional user icons).
+        # NOTE: the singular hass.http.async_register_static_path was removed in newer
+        # HA versions (breaks in 2025.7) — use the plural async API with a fallback.
+        if hasattr(hass.http, "async_register_static_paths"):
+            from homeassistant.components.http import StaticPathConfig
+
+            await hass.http.async_register_static_paths(
+                [StaticPathConfig(f"/{DOMAIN}_static", www_dir)]
+            )
+        else:  # older HA versions
+            hass.http.async_register_static_path(f"/{DOMAIN}_static", www_dir)
+    except Exception as err:  # noqa: BLE001 - cards are optional, backend must still work
+        _LOGGER.warning("Could not register static path for card assets: %s", err)
+    with open(os.path.join(os.path.dirname(__file__), "manifest.json"), encoding="utf-8") as f:
+        version = json.load(f).get("version", "0.0.0")
+    try:
+        from homeassistant.components.frontend import add_extra_js_url
+
+        # ?v=<version> forces a reload of the card JS after updates.
+        add_extra_js_url(hass, f"/{DOMAIN}_static/gamified-gtd-cards.js?v={version}")
+    except Exception as err:  # noqa: BLE001 - card is optional, backend must still work
+        _LOGGER.warning("Could not register custom cards JS: %s", err)
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Gamified GTD from a config entry.
 
     Creates the manager (loads the store, ensures profiles), registers services once,
     forwards platforms, and starts the reminder/summary scheduler.
     """
+    # Make sure the card assets are registered even if the domain-level
+    # async_setup ran in an unexpected order (helper is idempotent).
+    await _async_register_frontend_assets(hass)
+
     # Options override data; the manager keeps a merged view.
     manager = GTDManager(hass, entry.entry_id, dict(entry.options or entry.data))
     await manager.async_load()

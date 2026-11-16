@@ -29,6 +29,25 @@ Auto-registered by the integration (hard-refresh the browser once after an updat
 All card actions only call the `gamified_gtd.*` services / read sensors — everything works
 without the cards via HA built-ins (todo card, developer tools, automations).
 
+### Cards not loading? ("Custom element not found")
+
+The integration serves `www/` under `/gamified_gtd_static/` and adds
+`/gamified_gtd_static/gamified-gtd-cards.js?v=<version>` to the frontend's extra module
+URLs, which HA's `index.html` imports on every page load. If a card shows
+"Custom element not found":
+
+1. Update to the current version, **restart Home Assistant**, then **hard-refresh the
+   browser tab** (Ctrl/Cmd+Shift+R). The extra-module list is baked into the served
+   index page, and the JS itself is cached for a month (the `?v=` parameter changes with
+   every release, so updates are picked up automatically).
+2. In the browser DevTools, check the console for `Failed to load extra module ...` and
+   the Network tab for `/gamified_gtd_static/gamified-gtd-cards.js` — it must return 200
+   with a JavaScript content type. A 404 means the static path was not registered (check
+   the HA log for `Could not register static path for card assets`).
+3. No CDN or extra Lovelace resource is needed: the card module loads `lit` via a dynamic
+   import, falling back to the vendored `gamified-gtd-lit.js` bundle, so it works on HA
+   versions both with and without a `"lit"` import map.
+
 ### Icons
 
 The original FNV icons are copyrighted and **not shipped**. Drop your own files into
