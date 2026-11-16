@@ -38,7 +38,16 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     """
     www_dir = os.path.join(os.path.dirname(__file__), "www")
     # Serve www/ under /gamified_gtd_static (cards JS + optional user icons).
-    hass.http.async_register_static_path(f"/{DOMAIN}_static", www_dir)
+    # NOTE: the singular hass.http.async_register_static_path was removed in newer
+    # HA versions (breaks in 2025.7) — use the plural async API with a fallback.
+    if hasattr(hass.http, "async_register_static_paths"):
+        from homeassistant.components.http import StaticPathConfig
+
+        await hass.http.async_register_static_paths(
+            [StaticPathConfig(f"/{DOMAIN}_static", www_dir)]
+        )
+    else:  # older HA versions
+        hass.http.async_register_static_path(f"/{DOMAIN}_static", www_dir)
     with open(os.path.join(os.path.dirname(__file__), "manifest.json"), encoding="utf-8") as f:
         version = json.load(f).get("version", "0.0.0")
     try:
