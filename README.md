@@ -11,8 +11,29 @@ The full, agreed design lives in [DESIGN.md](DESIGN.md).
 
 ## Status
 
-Backend first: config flow, storage, `todo` entities, sensors, services and events are in place.
-A custom Pip-Boy-style Lovelace card follows later.
+Backend (config flow, storage, `todo` entities, sensors, services, events) and the five
+Pip-Boy-style custom cards are in place.
+
+## Custom cards
+
+Auto-registered by the integration (hard-refresh the browser once after an update):
+
+| Card type | Config |
+|---|---|
+| `custom:gamified-gtd-stats` | `person: person.alex` (+ `title`) — level/XP bar, HP, karma, caps, SPECIAL, skills, perks; dialogs for skill points and perk choice |
+| `custom:gamified-gtd-quests` | `title` — quest log with progress, new/complete quest |
+| `custom:gamified-gtd-tasks` | `list` (`inbox`/`next_actions`/`waiting_for`/`someday_maybe`/`all`), `assigned` (`all`/`me`/person), `show_completed` — incl. Clarify dialog for the inbox |
+| `custom:gamified-gtd-review` | `person` — auto-checked weekly review checklist |
+| `custom:gamified-gtd-rewards` | `person` — caps reward shop |
+
+All card actions only call the `gamified_gtd.*` services / read sensors — everything works
+without the cards via HA built-ins (todo card, developer tools, automations).
+
+### Icons
+
+The original FNV icons are copyrighted and **not shipped**. Drop your own files into
+`custom_components/gamified_gtd/www/gamified_gtd_icons/<kind>/<id>.png` (`special`, `skill`,
+`perk`, `quest`) — see the README in that folder. The cards fall back to text glyphs.
 
 ## Installation
 

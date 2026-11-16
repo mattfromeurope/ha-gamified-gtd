@@ -44,6 +44,7 @@ ADD_TO_INBOX_SCHEMA = vol.Schema(
         vol.Optional("tags"): vol.Any(cv.string, [cv.string]),
         vol.Optional("context"): cv.string,
         vol.Optional("project_id"): cv.string,
+        vol.Optional("list"): vol.In(["inbox", "next_actions", "waiting_for", "someday_maybe"]),
     }
 )
 

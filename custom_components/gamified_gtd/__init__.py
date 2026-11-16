@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import json
+import logging
+import os
+from typing import Any
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
@@ -9,7 +14,24 @@ from .const import DOMAIN
 from .manager import GTDManager
 from .services import async_setup_services, async_unload_services
 
+_LOGGER = logging.getLogger(__name__)
+
 PLATFORMS = ["todo", "sensor"]
+
+
+async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
+    """Register the static path and the custom card module (auto-loaded in the frontend)."""
+    www_dir = os.path.join(os.path.dirname(__file__), "www")
+    hass.http.async_register_static_path(f"/{DOMAIN}_static", www_dir)
+    with open(os.path.join(os.path.dirname(__file__), "manifest.json"), encoding="utf-8") as f:
+        version = json.load(f).get("version", "0.0.0")
+    try:
+        from homeassistant.components.frontend import add_extra_js_url
+
+        add_extra_js_url(hass, f"/{DOMAIN}_static/gamified-gtd-cards.js?v={version}")
+    except Exception as err:  # noqa: BLE001 - card is optional, backend must still work
+        _LOGGER.warning("Could not register custom cards JS: %s", err)
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

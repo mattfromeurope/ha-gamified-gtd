@@ -60,6 +60,11 @@ add_to_inbox:
       name: Project (quest) id
       selector:
         text:
+    list:
+      name: "Target list (default: inbox)"
+      selector:
+        select:
+          options: [inbox, next_actions, waiting_for, someday_maybe]
 
 clarify:
   name: Clarify inbox item

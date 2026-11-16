@@ -230,7 +230,9 @@ class GTDManager:
         return task
 
     async def add_to_inbox(self, call: ServiceCall) -> dict[str, Any]:
-        task = self._new_task(call.data["title"], {**call.data, "list": LIST_INBOX})
+        task = self._new_task(
+            call.data["title"], {**call.data, "list": call.data.get("list", LIST_INBOX)}
+        )
         self.data["tasks"][task["id"]] = task
         await self._save()
         return {"task_id": task["id"]}
@@ -703,7 +705,11 @@ class GTDManager:
             "hp": self.profile_hp(profile),
             "special": dict(profile["special"]),
             "skills": self.effective_skills(profile),
-            "perks": list(profile["perks"]),
+            "perks": [
+                {"id": pid, "name": g.PERKS_BY_ID[pid].name, "description": g.PERKS_BY_ID[pid].description}
+                for pid in profile["perks"]
+                if pid in g.PERKS_BY_ID
+            ],
             "review_streak": profile.get("review_streak", 0),
             "review_due": self.review_due(profile),
             "quests": quests,

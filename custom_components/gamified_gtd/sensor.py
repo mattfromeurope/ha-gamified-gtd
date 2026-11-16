@@ -34,6 +34,7 @@ async def async_setup_entry(
             ]
         )
     entities.append(QuestLogSensor(manager))
+    entities.append(RewardsSensor(manager))
     async_add_entities(entities)
 
 
@@ -74,14 +75,26 @@ class LevelSensor(GTDProfileSensor):
     def extra_state_attributes(self) -> dict[str, Any]:
         cap = self._manager.level_cap
         level = self.profile["level"]
+        skills = self._manager.effective_skills(self.profile)
+        available = g.available_perks(
+            level, self.profile["special"], skills, self.profile["perks"]
+        )
+        cum_level = g.cumulative_xp_for_level(level, cap)
+        cum_next = g.cumulative_xp_for_level(level + 1, cap) if level < cap else cum_level
         return {
             "xp": self.profile["xp"],
-            "xp_to_next": g.cumulative_xp_for_level(level + 1, cap) - self.profile["xp"]
-            if level < cap
-            else 0,
+            "xp_to_next": cum_next - self.profile["xp"] if level < cap else 0,
+            "xp_in_level": self.profile["xp"] - cum_level,
+            "xp_level_span": max(cum_next - cum_level, 1),
             "skill_points_available": self.profile["skill_points_available"],
             "perk_choice_pending": self.profile["perk_choice_pending"],
+            "available_perks": [
+                {"id": p.id, "name": p.name, "description": p.description}
+                for p in available
+            ],
             "days_since_review": self._days_since_review(),
+            "review_checklist": self._manager.review_checklist_state(),
+            "review_streak": self.profile.get("review_streak", 0),
         }
 
     def _days_since_review(self) -> int | None:
@@ -162,7 +175,39 @@ class PerksSensor(GTDProfileSensor):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        return {"perks": list(self.profile["perks"])}
+        perks = list(self.profile["perks"])
+        return {
+            "perks": perks,
+            "perk_names": {pid: g.PERKS_BY_ID[pid].name for pid in perks if pid in g.PERKS_BY_ID},
+        }
+
+
+class RewardsSensor(SensorEntity):
+    """The caps reward shop (configurable in the options)."""
+
+    _attr_should_poll = False
+    _attr_name = "GTD Rewards"
+
+    def __init__(self, manager: GTDManager) -> None:
+        self._manager = manager
+        self._attr_unique_id = f"{manager.entry_id}_rewards"
+
+    @callback
+    def _handle_update(self, event) -> None:
+        self.async_write_ha_state()
+
+    async def async_added_to_hass(self) -> None:
+        self.async_on_remove(
+            self.hass.bus.async_listen(EVENT_DATA_UPDATED, self._handle_update)
+        )
+
+    @property
+    def native_value(self) -> int:
+        return len(self._manager.rewards)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {"rewards": [dict(r) for r in self._manager.rewards]}
 
 
 class QuestLogSensor(SensorEntity):
