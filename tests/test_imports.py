@@ -66,3 +66,39 @@ def test_config_flow_handler_registered():
     handler = HANDLERS["gamified_gtd"]
     assert issubclass(handler, ConfigFlow)
     assert handler.__name__ == "GamifiedGTDConfigFlow"
+
+
+def test_config_flow_user_form_builds(tmp_path):
+    """Build the initial form exactly like the frontend does — catches selector
+    schema errors (e.g. non-string SelectOptionDict values -> HTTP 400)."""
+    import asyncio
+
+    from homeassistant.core import HomeAssistant
+    from homeassistant.config_entries import HANDLERS
+
+    importlib.import_module("custom_components.gamified_gtd.config_flow")
+
+    async def run():
+        hass = HomeAssistant(str(tmp_path))
+        hass.states.async_set("person.alex", "home", {"friendly_name": "Alex"})
+        flow = HANDLERS["gamified_gtd"]()
+        flow.hass = hass
+        flow.handler = "gamified_gtd"
+        flow.flow_id = "test"
+        flow.context = {"source": "user"}
+        result = await flow.async_step_user(None)
+        assert result["type"] == "form"
+        assert result["step_id"] == "user"
+        # the schema must be serializable the way the frontend receives it
+        for key in result["data_schema"].schema:
+            pass
+        return result
+
+    result = asyncio.run(run())
+    # every select option value must be a string
+    for key, validator in result["data_schema"].schema.items():
+        cfg = getattr(validator, "config", None)
+        options = getattr(cfg, "options", None) if cfg else None
+        if options:
+            for opt in options:
+                assert isinstance(opt["value"], str), f"{key}: option value not a str: {opt}"
