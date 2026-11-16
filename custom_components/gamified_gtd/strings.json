@@ -1,0 +1,71 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Gamified GTD",
+        "description": "Select the persons to create a profile for, and set the global options.",
+        "data": {
+          "persons": "Persons",
+          "level_cap": "Level cap",
+          "default_time_estimate": "Default time estimate (minutes)",
+          "default_energy": "Default energy (1-5)",
+          "default_xp_base": "XP base",
+          "contexts": "Default contexts"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Gamified GTD options",
+        "description": "Global options.",
+        "data": {
+          "persons": "Persons",
+          "level_cap": "Level cap",
+          "default_time_estimate": "Default time estimate (minutes)",
+          "default_energy": "Default energy (1-5)",
+          "default_xp_base": "XP base",
+          "contexts": "Default contexts"
+        }
+      },
+      "person": {
+        "title": "Profile setup",
+        "description": "Choose a person to configure.",
+        "data": {
+          "person": "Person"
+        }
+      },
+      "special": {
+        "title": "S.P.E.C.I.A.L.",
+        "description": "Allocate the SPECIAL attributes (1-10 each), like character creation in Fallout: New Vegas.",
+        "data": {
+          "strength": "Strength",
+          "perception": "Perception",
+          "endurance": "Endurance",
+          "charisma": "Charisma",
+          "intelligence": "Intelligence",
+          "agility": "Agility",
+          "luck": "Luck"
+        }
+      },
+      "tags": {
+        "title": "Tag! skills",
+        "description": "Choose 3 Tag! skills (+15 each).",
+        "data": {
+          "tagged_skills": "Tag! skills"
+        }
+      },
+      "notify": {
+        "title": "Notifications",
+        "description": "Notify service per person (empty = none), daily summary and HA notification center.",
+        "data": {
+          "summary_enabled": "Send daily summary of open tasks",
+          "summary_time": "Summary time",
+          "ha_notification": "Also post to the HA notification center",
+          "unassigned_to_all": "Send unassigned tasks to every configured person"
+        }
+      }
+    }
+  }
+}
