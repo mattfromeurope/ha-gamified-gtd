@@ -107,6 +107,7 @@ CHOOSE_PERK_SCHEMA = vol.Schema(
         vol.Optional("person"): cv.string,
         vol.Required("perk"): vol.In(list(g.PERKS_BY_ID)),
         vol.Optional("special_stat"): vol.In(g.SPECIAL_STATS),
+        vol.Optional("skill"): vol.In(g.SKILLS),
     }
 )
 

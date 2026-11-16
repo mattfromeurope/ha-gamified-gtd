@@ -105,9 +105,13 @@ Sneak, Speech, Survival, Unarmed.
 
 - **Skill points per level-up = 10 + 0.5 × INT** (odd INT alternates, remainder is carried over)
 - **Every 2nd level (from level 2): one perk selectable**, with FNV requirements
-  (minimum level, SPECIAL, skill). The 88 regular FNV perks are provided as a data set;
-  requirements are enforced by `choose_perk`; effects are translated into integration mechanics
-  (XP multiplier, skill points per level, +1 SPECIAL, …)
+  (minimum level, SPECIAL min/max, skill, perk prerequisite, any-of conditions).
+  All **88 regular FNV perks** are ported in `perks_data.py` (levels 2–28, ranks incl.
+  10× Intense Training / 3× Swift Learner / 3× Demolition Expert / 2× others);
+  requirements are enforced by `choose_perk`. Effects are translated into integration
+  mechanics where they map (XP multiplier, caps multiplier, skill points per level,
+  +1 SPECIAL, HP bonus, instant level, extra Tag! skill); combat/dialogue perks stay
+  selectable 1:1 as flavor entries
 - Level-up fires `level_up`; an available perk choice fires `perk_available`
 
 ### XP from tasks

@@ -298,6 +298,24 @@ choose_perk:
             - intelligence
             - agility
             - luck
+    skill:
+      name: Skill (for the Tag! perk)
+      selector:
+        select:
+          options:
+            - barter
+            - energy_weapons
+            - explosives
+            - guns
+            - lockpick
+            - medicine
+            - melee_weapons
+            - repair
+            - science
+            - sneak
+            - speech
+            - survival
+            - unarmed
 
 start_review:
   name: Start weekly review

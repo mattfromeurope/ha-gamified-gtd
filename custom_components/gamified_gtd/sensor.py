@@ -101,7 +101,7 @@ class HPSensor(GTDProfileSensor):
 
     @property
     def native_value(self) -> int:
-        return g.hit_points(self.profile["special"]["endurance"], self.profile["level"])
+        return self._manager.profile_hp(self.profile)
 
 
 class KarmaSensor(GTDProfileSensor):

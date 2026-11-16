@@ -1,12 +1,17 @@
 """Pure FNV (Fallout: New Vegas) gamification logic — no Home Assistant imports.
 
 All formulas are taken 1:1 from Fallout: New Vegas (see DESIGN.md).
+The 88 regular perks live in perks_data.py.
 """
 
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+
+try:  # package import (inside Home Assistant)
+    from .perks_data import PERKS, PERKS_BY_ID, Perk
+except ImportError:  # standalone testing from this directory
+    from perks_data import PERKS, PERKS_BY_ID, Perk
 
 SPECIAL_STATS = [
     "strength",
@@ -59,7 +64,6 @@ REVIEW_BASE_XP = 100
 OVERDUE_KARMA_DAYS = 7
 REVIEW_OVERDUE_KARMA_PER_WEEK = -1
 
-
 XP_BASE_SETTING = 150  # GECK iXPBase
 XP_BUMP_BASE_SETTING = 200  # GECK iXPBumpBase
 
@@ -111,9 +115,9 @@ def skill_value(
     return min(SKILL_MAX, base + allocated)
 
 
-def hit_points(endurance: int, level: int) -> int:
-    """FNV derived stat: HP = 95 + 20*END + 5*level."""
-    return 95 + 20 * endurance + 5 * level
+def hit_points(endurance: int, level: int, perk_bonus: int = 0) -> int:
+    """FNV derived stat: HP = 95 + 20*END + 5*level (+ perk bonuses like Life Giver)."""
+    return 95 + 20 * endurance + 5 * level + perk_bonus
 
 
 def time_factor(minutes: float) -> float:
@@ -158,7 +162,7 @@ def caps_from_xp(xp: int) -> int:
 
 
 def karma_title(karma: int) -> str:
-    """FNV-style karma titles, scaled to the -100..+100 range."""
+    """Karma titles inspired by FNV (level/karma-dependent there; scaled to -100..+100 here)."""
     if karma >= 80:
         return "Saint"
     if karma >= 50:
@@ -178,77 +182,14 @@ def clamp_karma(karma: int) -> int:
     return max(KARMA_MIN, min(KARMA_MAX, karma))
 
 
-@dataclass(frozen=True)
-class Perk:
-    """One FNV perk. `effect` maps to integration mechanics.
-
-    effect types:
-      - xp_multiplier: multiplies all XP gains (e.g. Swift Learner)
-      - skill_points_per_level: extra skill points on every level-up (e.g. Educated)
-      - special_plus: +1 to a SPECIAL stat (e.g. Intense Training)
-    """
-
-    id: str
-    name: str
-    description: str
-    min_level: int = 2
-    requires_special: dict[str, int] = field(default_factory=dict)
-    requires_skill: dict[str, int] = field(default_factory=dict)
-    effect: dict[str, object] = field(default_factory=dict)
-    max_ranks: int = 1
-
-
-PERKS: list[Perk] = [
-    Perk(
-        id="swift_learner",
-        name="Swift Learner",
-        description="+10% XP from all sources.",
-        min_level=2,
-        effect={"xp_multiplier": 1.10},
-    ),
-    Perk(
-        id="educated",
-        name="Educated",
-        description="+2 skill points per level-up.",
-        min_level=4,
-        requires_special={"intelligence": 6},
-        effect={"skill_points_per_level": 2},
-    ),
-    Perk(
-        id="intense_training",
-        name="Intense Training",
-        description="+1 to any SPECIAL attribute. Can be taken up to 10 times.",
-        min_level=2,
-        effect={"special_plus": 1},
-        max_ranks=10,
-    ),
-    Perk(
-        id="comprehension",
-        name="Comprehension",
-        description="Skill books and magazines grant +10% more skill points.",
-        min_level=4,
-        requires_skill={"science": 20},
-        effect={"skill_points_per_level": 1},
-    ),
-    Perk(
-        id="good_natured",
-        name="Good Natured",
-        description="+10 to Barter and Speech.",
-        min_level=2,
-        requires_special={"charisma": 5},
-        effect={"skill_plus": {"barter": 10, "speech": 10}},
-    ),
-    Perk(
-        id="caps_collector",
-        name="Caps Collector",
-        description="+25% Caps from all sources.",
-        min_level=6,
-        requires_special={"luck": 6},
-        effect={"caps_multiplier": 1.25},
-    ),
-]
-
-PERKS_BY_ID = {perk.id: perk for perk in PERKS}
+def _any_condition_met(
+    condition: dict, special: dict[str, int], skills: dict[str, int]
+) -> bool:
+    if "skill" in condition:
+        return skills.get(condition["skill"], 0) >= condition["value"]
+    if "special" in condition:
+        return special.get(condition["special"], 0) >= condition["value"]
+    return False
 
 
 def perk_requirements_met(
@@ -256,19 +197,28 @@ def perk_requirements_met(
     level: int,
     special: dict[str, int],
     skills: dict[str, int],
-    taken_ranks: int,
+    owned: list[str],
 ) -> bool:
-    """Check FNV perk requirements (level, SPECIAL, skill) and rank limit."""
+    """Check FNV perk requirements: level, rank limit, SPECIAL (min/max), skill, perk prereq, any-of."""
     if level < perk.min_level:
         return False
-    if taken_ranks >= perk.max_ranks:
+    if owned.count(perk.id) >= perk.max_ranks:
         return False
     for stat, minimum in perk.requires_special.items():
         if special.get(stat, 0) < minimum:
             return False
+    for stat, maximum in perk.requires_special_max.items():
+        if special.get(stat, 0) >= maximum:
+            return False
     for skill, minimum in perk.requires_skill.items():
         if skills.get(skill, 0) < minimum:
             return False
+    if perk.requires_perk and perk.requires_perk not in owned:
+        return False
+    if perk.requires_any and not any(
+        _any_condition_met(cond, special, skills) for cond in perk.requires_any
+    ):
+        return False
     return True
 
 
@@ -279,38 +229,44 @@ def available_perks(
     owned: list[str],
 ) -> list[Perk]:
     """Perks the profile may choose right now."""
-    counts: dict[str, int] = {}
-    for perk_id in owned:
-        counts[perk_id] = counts.get(perk_id, 0) + 1
     return [
         perk
         for perk in PERKS
-        if perk_requirements_met(perk, level, special, skills, counts.get(perk.id, 0))
+        if perk_requirements_met(perk, level, special, skills, owned)
     ]
 
 
 def xp_multiplier(owned: list[str]) -> float:
     multiplier = 1.0
     for perk_id in owned:
-        effect = PERKS_BY_ID.get(perk_id)
-        if effect and "xp_multiplier" in effect.effect:
-            multiplier *= float(effect.effect["xp_multiplier"])
+        perk = PERKS_BY_ID.get(perk_id)
+        if perk and "xp_multiplier" in perk.effect:
+            multiplier *= float(perk.effect["xp_multiplier"])
     return multiplier
 
 
 def caps_multiplier(owned: list[str]) -> float:
     multiplier = 1.0
     for perk_id in owned:
-        effect = PERKS_BY_ID.get(perk_id)
-        if effect and "caps_multiplier" in effect.effect:
-            multiplier *= float(effect.effect["caps_multiplier"])
+        perk = PERKS_BY_ID.get(perk_id)
+        if perk and "caps_multiplier" in perk.effect:
+            multiplier *= float(perk.effect["caps_multiplier"])
     return multiplier
 
 
 def skill_points_bonus_per_level(owned: list[str]) -> int:
     bonus = 0
     for perk_id in owned:
-        effect = PERKS_BY_ID.get(perk_id)
-        if effect and "skill_points_per_level" in effect.effect:
-            bonus += int(effect.effect["skill_points_per_level"])
+        perk = PERKS_BY_ID.get(perk_id)
+        if perk and "skill_points_per_level" in perk.effect:
+            bonus += int(perk.effect["skill_points_per_level"])
+    return bonus
+
+
+def hp_bonus(owned: list[str]) -> int:
+    bonus = 0
+    for perk_id in owned:
+        perk = PERKS_BY_ID.get(perk_id)
+        if perk and "hp_bonus" in perk.effect:
+            bonus += int(perk.effect["hp_bonus"])
     return bonus

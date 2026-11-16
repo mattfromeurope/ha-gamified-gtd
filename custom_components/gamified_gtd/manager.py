@@ -175,6 +175,13 @@ class GTDManager:
             return next(iter(profiles.values()))
         raise ValueError("No profiles configured")
 
+    def profile_hp(self, profile: dict[str, Any]) -> int:
+        return g.hit_points(
+            profile["special"]["endurance"],
+            profile["level"],
+            g.hp_bonus(profile["perks"]),
+        )
+
     def effective_skills(self, profile: dict[str, Any]) -> dict[str, int]:
         special = profile["special"]
         tagged = set(profile.get("tagged_skills", []))
@@ -425,6 +432,16 @@ class GTDManager:
             if stat not in g.SPECIAL_STATS:
                 raise ValueError(f"Unknown SPECIAL stat: {stat}")
             profile["special"][stat] = min(10, profile["special"][stat] + 1)
+        if perk.effect.get("tag_skill"):
+            skill = call.data.get("skill")
+            if skill not in g.SKILLS:
+                raise ValueError(f"Tag! needs a valid skill, got: {skill}")
+            if skill not in profile["tagged_skills"]:
+                profile["tagged_skills"].append(skill)
+        if perk.effect.get("instant_level"):
+            needed = g.cumulative_xp_for_level(profile["level"] + 1, self.level_cap) - profile["xp"]
+            if needed > 0:
+                await self._award_xp(profile, needed)
         await self._save()
         self.hass.bus.async_fire(
             EVENT_PERK_CHOSEN, {"person": profile["person"], "perk": perk_id}
@@ -683,7 +700,7 @@ class GTDManager:
             "karma": profile["karma"],
             "karma_title": g.karma_title(profile["karma"]),
             "caps": profile["caps"],
-            "hp": g.hit_points(profile["special"]["endurance"], profile["level"]),
+            "hp": self.profile_hp(profile),
             "special": dict(profile["special"]),
             "skills": self.effective_skills(profile),
             "perks": list(profile["perks"]),
