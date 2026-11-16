@@ -48,8 +48,8 @@ jobs:
           python-version: "3.12"
       - name: Install homeassistant + pytest
         run: pip install homeassistant pytest
-      - name: Run import smoke tests
-        run: python -m pytest tests/test_imports.py -q
+      - name: Run import smoke + setup tests
+        run: python -m pytest tests/test_imports.py tests/test_setup.py -q
 
   # Frontend: syntax-check the custom card module (ES module -> node --check).
   frontend:
