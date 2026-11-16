@@ -245,4 +245,4 @@ assigned: me
 1. Backend + entities + services + events (this stage)
 2. Full 88-perk data set port
 3. Custom Pip-Boy-style Lovelace card (auto-registered)
-4. Reminders/notifications, LLM/voice tools
+4. Reminders/notifications (done — `notify.py`: due reminders, location-held reminders, repeat-while-overdue, daily summary, HA notification center) + LLM/voice tools

@@ -55,6 +55,16 @@
         "data": {
           "tagged_skills": "Tag! skills"
         }
+      },
+      "notify": {
+        "title": "Notifications",
+        "description": "Notify service per person (empty = none), daily summary and HA notification center.",
+        "data": {
+          "summary_enabled": "Send daily summary of open tasks",
+          "summary_time": "Summary time",
+          "ha_notification": "Also post to the HA notification center",
+          "unassigned_to_all": "Send unassigned tasks to every configured person"
+        }
       }
     }
   }

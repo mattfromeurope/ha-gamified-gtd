@@ -24,6 +24,27 @@ add_to_inbox:
       name: Due date
       selector:
         date:
+    due_time:
+      name: Due time (default 09:00 when only a date is set)
+      selector:
+        time:
+    reminders:
+      name: Reminders (minutes before due, comma separated)
+      description: e.g. "60, 1440" = 1 h and 1 day before
+      selector:
+        text:
+    location:
+      name: "Location condition: {zone: zone.home, mode: inside|outside}"
+      description: Held until the assigned person is inside (or outside) the zone.
+      selector:
+        object:
+    overdue_repeat:
+      name: Repeat while overdue (minutes interval)
+      selector:
+        number:
+          min: 1
+          max: 10080
+          unit_of_measurement: min
     time_estimate:
       name: Time estimate (minutes)
       description: Falls back to the configured default when omitted.
@@ -160,6 +181,24 @@ update_task:
     due:
       selector:
         date:
+    due_time:
+      selector:
+        time:
+    reminders:
+      name: Reminders (minutes before due, comma separated)
+      selector:
+        text:
+    location:
+      name: "Location condition: {zone: zone.home, mode: inside|outside}"
+      selector:
+        object:
+    overdue_repeat:
+      name: Repeat while overdue (minutes interval)
+      selector:
+        number:
+          min: 1
+          max: 10080
+          unit_of_measurement: min
     time_estimate:
       selector:
         number:

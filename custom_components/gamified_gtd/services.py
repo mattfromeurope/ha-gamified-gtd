@@ -45,6 +45,12 @@ ADD_TO_INBOX_SCHEMA = vol.Schema(
         vol.Optional("context"): cv.string,
         vol.Optional("project_id"): cv.string,
         vol.Optional("list"): vol.In(["inbox", "next_actions", "waiting_for", "someday_maybe"]),
+        vol.Optional("due_time"): cv.string,
+        vol.Optional("reminders"): vol.Any([vol.Coerce(int)], cv.string),
+        vol.Optional("location"): vol.Schema(
+            {vol.Required("zone"): cv.string, vol.Required("mode"): vol.In(["inside", "outside"])}
+        ),
+        vol.Optional("overdue_repeat"): vol.All(vol.Coerce(int), vol.Range(min=1)),
     }
 )
 
@@ -77,6 +83,12 @@ UPDATE_TASK_SCHEMA = vol.Schema(
         vol.Optional("energy"): vol.All(vol.Coerce(int), vol.Range(min=1, max=5)),
         vol.Optional("assigned_to"): cv.string,
         vol.Optional("tags"): vol.Any(cv.string, [cv.string]),
+        vol.Optional("due_time"): cv.string,
+        vol.Optional("reminders"): vol.Any([vol.Coerce(int)], cv.string),
+        vol.Optional("location"): vol.Schema(
+            {vol.Required("zone"): cv.string, vol.Required("mode"): vol.In(["inside", "outside"])}
+        ),
+        vol.Optional("overdue_repeat"): vol.All(vol.Coerce(int), vol.Range(min=1)),
     }
 )
 

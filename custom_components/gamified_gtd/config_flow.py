@@ -8,6 +8,7 @@ import voluptuous as vol
 
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.core import callback
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import selector
 
 from . import gamification as g
@@ -17,12 +18,18 @@ from .const import (
     CONF_DEFAULT_PROFILE,
     CONF_DEFAULT_TIME_ESTIMATE,
     CONF_DEFAULT_XP_BASE,
+    CONF_HA_NOTIFICATION,
     CONF_LEVEL_CAP,
+    CONF_NOTIFY_SERVICES,
     CONF_PERSONS,
     CONF_REWARDS,
+    CONF_SUMMARY_ENABLED,
+    CONF_SUMMARY_TIME,
+    CONF_UNASSIGNED_TO_ALL,
     DEFAULT_CONTEXTS,
     DEFAULT_ENERGY,
     DEFAULT_LEVEL_CAP,
+    DEFAULT_SUMMARY_TIME,
     DEFAULT_TIME_ESTIMATE,
     DEFAULT_XP_BASE,
     DOMAIN,
@@ -111,10 +118,49 @@ class GamifiedGDTOptionsFlow(OptionsFlow):
     ) -> ConfigFlowResult:
         if user_input is not None:
             self._options = {**self._options, **user_input}
-            return await self.async_step_person()
+            return await self.async_step_notify()
         merged = {**self.config_entry.data, **self.config_entry.options}
         return self.async_show_form(
             step_id="init", data_schema=_base_schema(self.hass, merged)
+        )
+
+    async def async_step_notify(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        if user_input is not None:
+            notify_map = {
+                p: user_input.pop(p, "")
+                for p in self._options.get(CONF_PERSONS, [])
+                if p in user_input
+            }
+            self._options[CONF_NOTIFY_SERVICES] = notify_map
+            self._options.update(user_input)
+            return await self.async_step_person()
+        merged = {**self.config_entry.data, **self.config_entry.options}
+        persons = merged.get(CONF_PERSONS, [])
+        notify_map = merged.get(CONF_NOTIFY_SERVICES, {})
+        schema = {
+            vol.Optional(
+                CONF_SUMMARY_ENABLED,
+                default=bool(merged.get(CONF_SUMMARY_ENABLED, False)),
+            ): bool,
+            vol.Optional(
+                CONF_SUMMARY_TIME,
+                default=merged.get(CONF_SUMMARY_TIME, DEFAULT_SUMMARY_TIME),
+            ): selector.TimeSelector(),
+            vol.Optional(
+                CONF_HA_NOTIFICATION,
+                default=bool(merged.get(CONF_HA_NOTIFICATION, False)),
+            ): bool,
+            vol.Optional(
+                CONF_UNASSIGNED_TO_ALL,
+                default=bool(merged.get(CONF_UNASSIGNED_TO_ALL, False)),
+            ): bool,
+        }
+        for person in persons:
+            schema[vol.Optional(person, default=notify_map.get(person, ""))] = cv.string
+        return self.async_show_form(
+            step_id="notify", data_schema=vol.Schema(schema)
         )
 
     async def async_step_person(

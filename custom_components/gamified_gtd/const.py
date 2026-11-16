@@ -87,8 +87,20 @@ SERVICE_REWARD = "reward"
 SERVICE_DECISION = "decision"
 SERVICE_PROJECT = "project"
 
+# Notification options
+CONF_NOTIFY_SERVICES = "notify_services"  # {person_entity_id: notify service, "" = none}
+CONF_SUMMARY_ENABLED = "summary_enabled"
+CONF_SUMMARY_TIME = "summary_time"
+CONF_HA_NOTIFICATION = "ha_notification"
+CONF_UNASSIGNED_TO_ALL = "unassigned_to_all"
+DEFAULT_SUMMARY_TIME = "08:00"
+SUMMARY_HORIZON_DAYS = 7
+DEFAULT_DUE_TIME = "09:00"
+
 # Events
 EVENT_DATA_UPDATED = f"{DOMAIN}_data_updated"
+EVENT_REMINDER_SENT = f"{DOMAIN}_reminder_sent"
+EVENT_SUMMARY_SENT = f"{DOMAIN}_summary_sent"
 EVENT_TASK_COMPLETED = f"{DOMAIN}_task_completed"
 EVENT_LEVEL_UP = f"{DOMAIN}_level_up"
 EVENT_PERK_AVAILABLE = f"{DOMAIN}_perk_available"

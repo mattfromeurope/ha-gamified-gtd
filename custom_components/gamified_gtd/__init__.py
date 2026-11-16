@@ -12,6 +12,7 @@ from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
 from .manager import GTDManager
+from .notify import NotificationScheduler
 from .services import async_setup_services, async_unload_services
 
 _LOGGER = logging.getLogger(__name__)
@@ -47,6 +48,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await async_setup_services(hass)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
+    scheduler = NotificationScheduler(hass, manager)
+    await scheduler.async_start()
+    hass.data[DOMAIN][f"{entry.entry_id}_scheduler"] = scheduler
+
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     return True
 
@@ -55,6 +60,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
+        scheduler = hass.data[DOMAIN].pop(f"{entry.entry_id}_scheduler", None)
+        if scheduler is not None:
+            await scheduler.async_stop()
         hass.data[DOMAIN].pop(entry.entry_id, None)
         hass.data[DOMAIN]["managers"] = [
             m for m in hass.data[DOMAIN].values() if isinstance(m, GTDManager)

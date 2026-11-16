@@ -202,6 +202,14 @@ class GTDManager:
     # Tasks
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _normalize_reminders(value: Any) -> list[int]:
+        if not value:
+            return []
+        if isinstance(value, str):
+            value = [v for v in value.replace(";", ",").split(",") if v.strip()]
+        return [int(v) for v in value]
+
     def _new_task(self, title: str, call_data: dict[str, Any]) -> dict[str, Any]:
         return {
             "id": _new_id(),
@@ -213,6 +221,10 @@ class GTDManager:
             "project_id": call_data.get("project_id"),
             "priority": int(call_data.get("priority", 3)),
             "due": call_data.get("due"),
+            "due_time": call_data.get("due_time"),
+            "reminders": self._normalize_reminders(call_data.get("reminders")),
+            "location": call_data.get("location"),
+            "overdue_repeat": call_data.get("overdue_repeat"),
             "time_estimate": float(
                 call_data.get("time_estimate", self.default_time_estimate)
             ),
@@ -278,11 +290,17 @@ class GTDManager:
             "context",
             "project_id",
             "due",
+            "due_time",
+            "location",
             "assigned_to",
             "tags",
         ):
             if key in call.data:
                 task[key] = call.data[key]
+        if "reminders" in call.data:
+            task["reminders"] = self._normalize_reminders(call.data["reminders"])
+        if "overdue_repeat" in call.data:
+            task["overdue_repeat"] = call.data["overdue_repeat"]
         if "priority" in call.data:
             task["priority"] = int(call.data["priority"])
         if "time_estimate" in call.data:

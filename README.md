@@ -57,6 +57,25 @@ The original FNV icons are copyrighted and **not shipped**. Drop your own files 
 `allocate_skill_points`, `choose_perk`, `start_review`, `complete_review`, `redeem_reward`,
 `get_state` — see `custom_components/gamified_gtd/services.yaml`.
 
+## Notifications
+
+Configured in the integration options (per person: notify service, e.g. `notify.mobile_app_*`):
+
+- **Per-task reminders** (`reminders: [60, 1440]` = 1 h / 1 day before due; tasks with only a
+  date use 09:00 as reference time) — fields `reminders`, `due_time`, `location`,
+  `overdue_repeat` on `add_to_inbox` / `update_task`
+- **Location-based reminders** (`location: {zone: zone.home, mode: inside}`): delivered
+  immediately if the condition matches, otherwise **held** until the person enters/leaves
+  the zone; dropped when the task is completed or the due changes. Persons without location
+  tracking count as matching, so nothing is swallowed
+- **Repeat while overdue** (`overdue_repeat: 15` = every 15 min until completed)
+- **Daily summary** per person at a configurable time (due/overdue always included, plus
+  tasks due within 7 days; no message when empty); optionally also in the HA notification
+  center (`persistent_notification`)
+
+Events: `gamified_gtd_reminder_sent`, `gamified_gtd_summary_sent` — build your own
+automations on top if you prefer.
+
 ## Events
 
 `gamified_gtd_task_completed`, `gamified_gtd_level_up`, `gamified_gtd_perk_available`,
