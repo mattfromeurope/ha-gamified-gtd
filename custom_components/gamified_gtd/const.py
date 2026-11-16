@@ -136,6 +136,12 @@ SUMMARY_HORIZON_DAYS = 7  # summary includes tasks due within this many days
 DEFAULT_DUE_TIME = "09:00"  # reference time for due dates without a time
 
 # ---------------------------------------------------------------------------
+# Karma rules
+# ---------------------------------------------------------------------------
+OVERDUE_KARMA_DAYS = 7  # completing > 7 days overdue costs karma
+REVIEW_OVERDUE_KARMA_PER_WEEK = -1  # karma per overdue review week
+
+# ---------------------------------------------------------------------------
 # Weekly review
 # ---------------------------------------------------------------------------
 REVIEW_INTERVAL_DAYS = 7

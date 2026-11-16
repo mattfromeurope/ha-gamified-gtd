@@ -18,7 +18,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
-from .manager import GTDManager
+from .manager import GTDManager, get_manager  # noqa: F401  (re-exported)
 from .notify import NotificationScheduler
 from .services import async_setup_services, async_unload_services
 
@@ -111,14 +111,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Reload the entry when the user changes options in the config flow."""
     await hass.config_entries.async_reload(entry.entry_id)
-
-
-def get_manager(hass: HomeAssistant) -> GTDManager:
-    """Return the (first) manager — services operate on the first entry for now."""
-    managers: list[GTDManager] = hass.data[DOMAIN].get("managers", [])
-    if not managers:
-        raise ValueError("Gamified GTD is not set up")
-    return managers[0]
 
 
 def person_label(hass: HomeAssistant, person: str) -> str:
