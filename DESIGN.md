@@ -199,7 +199,44 @@ Sneak, Speech, Survival, Unarmed.
 - Options: persons, level cap (30/50), default `time_estimate` / `energy`, default contexts,
   reward list, XP base
 
-## 8. Roadmap
+## 8. Frontend: custom cards (later stage)
+
+**Principle:** cards are thin frontends. They read sensors/store and only call the existing
+services — no own state, no parallel logic. Everything a card can do is also possible with
+HA built-ins (todo list card, developer tools, automations); the card is just the convenient
+variant. Services themselves cannot open dialogs/popups in HA — dialogs are opened by the card
+(or via browser_mod in automations).
+
+Five separate card types (auto-registered by the integration, YAML-configurable):
+
+| Card type | Shows / does | YAML options | Built-in equivalent |
+|---|---|---|---|
+| `gamified-gtd-stats` | Per person: level + XP bar, HP, karma title, caps, SPECIAL, skills, perks; dialogs to **allocate skill points** and **choose a perk** (with requirement display) | `person` | `sensor.<name>_*` + `allocate_skill_points` / `choose_perk` / `get_state` |
+| `gamified-gtd-quests` | Active quests with `x/y` progress, desired outcome, deadline; completed quests | `person` (optional) | `sensor.gtd_quest_log` + project services + `quest_completed` event |
+| `gamified-gtd-tasks` | One GTD list or all; add, complete, edit (priority, due, time/energy, context, person); **inbox mode with Clarify dialog** | `list`, `assigned` (`all` / `me` / person), `show_completed` | HA todo list card on `todo.gtd_*` (completing there awards XP/Caps/Karma via the entity) + `gamified_gtd.*` services |
+| `gamified-gtd-review` | Review due?, auto-checked checklist, start/complete buttons, streak | `person` | `start_review` / `complete_review`, `days_since_review` attribute, `review_completed` event |
+| `gamified-gtd-rewards` | Reward shop with cap costs, balance, redeem button | `person` | `sensor.<name>_caps` + `redeem_reward` + `reward_redeemed` event |
+
+### Clarify dialog (inside `gamified-gtd-tasks`, inbox mode)
+
+Task title/notes on top, decision as segmented control — *Next Action* (context chips below) /
+*Project* (pick existing or create new with desired outcome) / *Waiting for* / *Someday* /
+*Done now (2-minute rule)* — plus optional priority, due, time estimate, energy, person.
+One click calls `gamified_gtd.clarify` and closes the dialog.
+
+Example YAML:
+
+```yaml
+type: custom:gamified-gtd-stats
+person: person.alex
+```
+```yaml
+type: custom:gamified-gtd-tasks
+list: next_actions
+assigned: me
+```
+
+## 9. Roadmap
 
 1. Backend + entities + services + events (this stage)
 2. Full 88-perk data set port
