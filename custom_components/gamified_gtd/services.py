@@ -32,7 +32,7 @@ from .const import (
     SERVICE_START_REVIEW,
     SERVICE_UPDATE_TASK,
 )
-from . import get_manager
+from .manager import get_manager
 
 # Shared field block: every task-addressing service takes a task_id.
 TASK_FIELDS = {

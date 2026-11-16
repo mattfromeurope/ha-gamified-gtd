@@ -56,11 +56,20 @@ from .const import (
     PROJECT_DONE,
     REVIEW_CHECKLIST,
     REVIEW_INTERVAL_DAYS,
+    REVIEW_OVERDUE_KARMA_PER_WEEK,
     STORAGE_KEY,
     STORAGE_VERSION,
     TASK_DONE,
     TASK_OPEN,
 )
+
+
+def get_manager(hass: HomeAssistant) -> "GTDManager":
+    """Return the (first) manager — services/LLM tools operate on the first entry for now."""
+    managers: list[GTDManager] = hass.data[DOMAIN].get("managers", [])
+    if not managers:
+        raise ValueError("Gamified GTD is not set up")
+    return managers[0]
 
 
 def _new_id() -> str:
@@ -739,7 +748,7 @@ class GTDManager:
             )
         if weeks_overdue:
             profile["karma"] = g.clamp_karma(
-                profile["karma"] + weeks_overdue * g.REVIEW_OVERDUE_KARMA_PER_WEEK
+                profile["karma"] + weeks_overdue * REVIEW_OVERDUE_KARMA_PER_WEEK
             )
             profile["review_streak"] = 0
         else:

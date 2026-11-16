@@ -85,8 +85,7 @@ QUEST_STEP_BONUS_XP = 25  # quest bonus per step: 25 XP * number of steps
 QUEST_ON_TIME_BONUS = 0.25  # +25% quest XP when finished before the quest deadline
 REVIEW_BASE_XP = 100  # weekly review bonus base (times streak)
 
-OVERDUE_KARMA_DAYS = 7  # completing > 7 days overdue costs karma
-REVIEW_OVERDUE_KARMA_PER_WEEK = -1  # karma per overdue review week
+# Karma rules (OVERDUE_KARMA_DAYS, REVIEW_OVERDUE_KARMA_PER_WEEK) live in const.py.
 
 # GECK game settings for the XP curve (vanilla values).
 XP_BASE_SETTING = 150  # iXPBase
