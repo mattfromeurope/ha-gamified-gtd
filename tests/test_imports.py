@@ -56,14 +56,13 @@ def test_module_imports(module):
 
 
 def test_config_flow_handler_registered():
-    from homeassistant.config_entries import ConfigFlow
+    """HA discovers config flows via the HANDLERS registry (the `domain=` class
+    keyword registers the subclass there) — this is what 'Invalid handler
+    specified' complained about when imports were broken."""
+    from homeassistant.config_entries import HANDLERS, ConfigFlow
 
-    cf = importlib.import_module("custom_components.gamified_gtd.config_flow")
-    handlers = [
-        c.__name__
-        for c in vars(cf).values()
-        if isinstance(c, type)
-        and issubclass(c, ConfigFlow)
-        and getattr(c, "domain", None) == "gamified_gtd"
-    ]
-    assert handlers, "no ConfigFlow subclass with domain='gamified_gtd' found"
+    importlib.import_module("custom_components.gamified_gtd.config_flow")
+    assert "gamified_gtd" in HANDLERS, "domain not registered in HANDLERS"
+    handler = HANDLERS["gamified_gtd"]
+    assert issubclass(handler, ConfigFlow)
+    assert handler.__name__ == "GamifiedGTDConfigFlow"
