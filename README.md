@@ -76,6 +76,14 @@ Configured in the integration options (per person: notify service, e.g. `notify.
 Events: `gamified_gtd_reminder_sent`, `gamified_gtd_summary_sent` — build your own
 automations on top if you prefer.
 
+## Voice assistants / LLM agents
+
+The integration registers a tool set for conversation agents (Assist → *Control Home
+Assistant* → tick **Gamified GTD** next to your agent). Tools: `list_tasks` (filters +
+ready-to-read `speech` lines), `add_task`, `complete_task`, `clarify_task`, `get_state`,
+`allocate_skill_points`, `choose_perk`, `create_project`, `complete_project`, `review`,
+`redeem_reward` — all calling the same logic as the services/cards.
+
 ## Events
 
 `gamified_gtd_task_completed`, `gamified_gtd_level_up`, `gamified_gtd_perk_available`,

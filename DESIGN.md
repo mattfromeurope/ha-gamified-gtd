@@ -245,4 +245,4 @@ assigned: me
 1. Backend + entities + services + events (this stage)
 2. Full 88-perk data set port
 3. Custom Pip-Boy-style Lovelace card (auto-registered)
-4. Reminders/notifications (done — `notify.py`: due reminders, location-held reminders, repeat-while-overdue, daily summary, HA notification center) + LLM/voice tools
+4. Reminders/notifications (done — `notify.py`: due reminders, location-held reminders, repeat-while-overdue, daily summary, HA notification center); LLM/voice tools (done — `llm_api.py`: list_tasks/add_task/complete_task/clarify_task/get_state/allocate_skill_points/choose_perk/create_project/complete_project/review/redeem_reward via `homeassistant.helpers.llm`)
