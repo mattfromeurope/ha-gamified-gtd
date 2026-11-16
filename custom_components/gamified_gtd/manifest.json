@@ -1,0 +1,11 @@
+{
+  "domain": "gamified_gtd",
+  "name": "Gamified GTD",
+  "codeowners": ["@mattfromeurope"],
+  "config_flow": true,
+  "documentation": "https://github.com/mattfromeurope/ha-gamified-gtd",
+  "integration_type": "service",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/mattfromeurope/ha-gamified-gtd/issues",
+  "version": "0.1.0"
+}

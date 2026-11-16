@@ -1,0 +1,118 @@
+"""Todo list entities mirroring the GTD lists (shared, assigned via attribute)."""
+
+from __future__ import annotations
+
+from datetime import date
+from typing import Any
+
+from homeassistant.components.todo import TodoItem, TodoItemStatus, TodoListEntity, TodoListEntityFeature
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant, ServiceCall, callback
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
+from .const import DOMAIN, EVENT_DATA_UPDATED, TODO_LISTS, TASK_DONE, TASK_OPEN
+from .manager import GTDManager
+
+
+async def async_setup_entry(
+    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+) -> None:
+    """Set up the four GTD todo lists."""
+    manager: GTDManager = hass.data[DOMAIN][entry.entry_id]
+    async_add_entities(
+        GTDTodoListEntity(manager, list_key, name) for list_key, name in TODO_LISTS.items()
+    )
+
+
+class GTDTodoListEntity(TodoListEntity):
+    """One todo entity per GTD list; writes through to the manager's storage."""
+
+    _attr_supported_features = (
+        TodoListEntityFeature.CREATE_TODO_ITEM
+        | TodoListEntityFeature.UPDATE_TODO_ITEM
+        | TodoListEntityFeature.DELETE_TODO_ITEM
+    )
+
+    def __init__(self, manager: GTDManager, list_key: str, name: str) -> None:
+        self._manager = manager
+        self._list_key = list_key
+        self._attr_name = name
+        self._attr_unique_id = f"{manager.entry_id}_{list_key}"
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        self.async_write_ha_state()
+
+    async def async_added_to_hass(self) -> None:
+        self.async_on_remove(
+            self.hass.bus.async_listen(EVENT_DATA_UPDATED, self._handle_coordinator_update)
+        )
+
+    @property
+    def todo_items(self) -> list[TodoItem] | None:
+        items = []
+        for task in self._manager.data["tasks"].values():
+            if task["list"] != self._list_key:
+                continue
+            items.append(
+                TodoItem(
+                    uid=task["id"],
+                    summary=task["title"],
+                    status=TodoItemStatus.COMPLETED
+                    if task["status"] == TASK_DONE
+                    else TodoItemStatus.NEEDS_ACTION,
+                    due=date.fromisoformat(task["due"]) if task.get("due") else None,
+                    description=task.get("notes") or None,
+                )
+            )
+        return items
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        tasks = {
+            task["id"]: {
+                "assigned_to": task.get("assigned_to"),
+                "context": task.get("context"),
+                "project_id": task.get("project_id"),
+                "priority": task.get("priority"),
+                "time_estimate": task.get("time_estimate"),
+                "energy": task.get("energy"),
+                "tags": task.get("tags", []),
+                "status": task["status"],
+            }
+            for task in self._manager.data["tasks"].values()
+            if task["list"] == self._list_key
+        }
+        return {"tasks": tasks}
+
+    async def async_create_todo_item(self, item: TodoItem) -> None:
+        await self._manager.add_to_inbox(
+            ServiceCall(
+                DOMAIN,
+                "add_to_inbox",
+                {
+                    "title": item.summary,
+                    "notes": item.description or "",
+                    "list": self._list_key,
+                    "due": item.due.isoformat() if item.due else None,
+                },
+            )
+        )
+
+    async def async_update_todo_item(self, item: TodoItem) -> None:
+        if item.status == TodoItemStatus.COMPLETED:
+            await self._manager.complete_task(
+                ServiceCall(DOMAIN, "complete_task", {"task_id": item.uid})
+            )
+        else:
+            task = self._manager.get_task(item.uid)
+            task["status"] = TASK_OPEN
+            task["completed_at"] = None
+            await self._manager._save()
+
+    async def async_delete_todo_items(self, uids: list[str]) -> None:
+        for uid in uids:
+            if uid in self._manager.data["tasks"]:
+                await self._manager.remove_task(
+                    ServiceCall(DOMAIN, "remove_task", {"task_id": uid})
+                )

@@ -1,0 +1,374 @@
+add_to_inbox:
+  name: Add to inbox
+  description: Quickly capture a new task in the GTD inbox.
+  fields:
+    title:
+      name: Title
+      required: true
+      selector:
+        text:
+    notes:
+      name: Notes
+      selector:
+        text:
+          multiline: true
+    priority:
+      name: Priority (1 = highest, 5 = lowest)
+      default: 3
+      selector:
+        number:
+          min: 1
+          max: 5
+          mode: slider
+    due:
+      name: Due date
+      selector:
+        date:
+    time_estimate:
+      name: Time estimate (minutes)
+      description: Falls back to the configured default when omitted.
+      selector:
+        number:
+          min: 0
+          max: 1440
+          unit_of_measurement: min
+    energy:
+      name: Energy required (1-5)
+      description: Falls back to the configured default when omitted.
+      default: 3
+      selector:
+        number:
+          min: 1
+          max: 5
+          mode: slider
+    assigned_to:
+      name: Assigned to
+      description: person entity id
+      selector:
+        text:
+    tags:
+      name: Tags
+      selector:
+        text:
+          multiple: true
+    context:
+      name: Context
+      description: e.g. @home, @computer, @phone
+      selector:
+        text:
+    project_id:
+      name: Project (quest) id
+      selector:
+        text:
+
+clarify:
+  name: Clarify inbox item
+  description: Process an inbox item into a next action, project, waiting-for, someday — or mark it done.
+  fields:
+    task_id:
+      name: Task id
+      required: true
+      selector:
+        text:
+    decision:
+      name: Decision
+      required: true
+      selector:
+        select:
+          options:
+            - next_action
+            - project
+            - waiting_for
+            - someday
+            - done
+    context:
+      name: Context
+      selector:
+        text:
+    project_id:
+      name: Existing project id
+      selector:
+        text:
+    project_name:
+      name: New project name
+      selector:
+        text:
+    desired_outcome:
+      name: Desired outcome (for a new project)
+      selector:
+        text:
+          multiline: true
+    assigned_to:
+      name: Assigned to
+      selector:
+        text:
+    person:
+      name: Person (whose profile gets XP for "done")
+      selector:
+        text:
+
+complete_task:
+  name: Complete task
+  description: Mark a task done. Always grants XP; grants Caps only when not overdue. Updates karma and level.
+  fields:
+    task_id:
+      name: Task id
+      required: true
+      selector:
+        text:
+    person:
+      name: Person (fallback when the task is unassigned)
+      selector:
+        text:
+
+update_task:
+  name: Update task
+  description: Change fields of an existing task.
+  fields:
+    task_id:
+      name: Task id
+      required: true
+      selector:
+        text:
+    title:
+      selector:
+        text:
+    notes:
+      selector:
+        text:
+          multiline: true
+    list:
+      selector:
+        select:
+          options: [inbox, next_actions, waiting_for, someday_maybe]
+    context:
+      selector:
+        text:
+    project_id:
+      selector:
+        text:
+    priority:
+      selector:
+        number:
+          min: 1
+          max: 5
+    due:
+      selector:
+        date:
+    time_estimate:
+      selector:
+        number:
+          min: 0
+          max: 1440
+          unit_of_measurement: min
+    energy:
+      selector:
+        number:
+          min: 1
+          max: 5
+    assigned_to:
+      selector:
+        text:
+    tags:
+      selector:
+        text:
+          multiple: true
+
+skip_task:
+  name: Skip task
+  description: Move a task to the waiting-for list.
+  fields:
+    task_id:
+      name: Task id
+      required: true
+      selector:
+        text:
+
+remove_task:
+  name: Remove task
+  description: Delete a task.
+  fields:
+    task_id:
+      name: Task id
+      required: true
+      selector:
+        text:
+
+create_project:
+  name: Create project (quest)
+  description: Create a GTD project, which acts as a quest in the quest log.
+  fields:
+    name:
+      name: Name
+      required: true
+      selector:
+        text:
+    desired_outcome:
+      name: Desired outcome
+      selector:
+        text:
+          multiline: true
+    due:
+      name: Quest deadline (optional, grants +25% quest XP when met)
+      selector:
+        date:
+
+add_to_project:
+  name: Add task to project
+  description: Attach a task to a project/quest (moves it to next actions).
+  fields:
+    task_id:
+      name: Task id
+      required: true
+      selector:
+        text:
+    project_id:
+      name: Project id
+      required: true
+      selector:
+        text:
+
+complete_project:
+  name: Complete project (quest)
+  description: Complete a quest. Quest XP = sum of step XP + 25 XP per step, paid automatically.
+  fields:
+    project_id:
+      name: Project id
+      required: true
+      selector:
+        text:
+
+allocate_skill_points:
+  name: Allocate skill points
+  description: Distribute skill points gained from level-ups to a skill (FNV 1:1).
+  fields:
+    person:
+      name: Person
+      selector:
+        text:
+    skill:
+      name: Skill
+      required: true
+      selector:
+        select:
+          options:
+            - barter
+            - energy_weapons
+            - explosives
+            - guns
+            - lockpick
+            - medicine
+            - melee_weapons
+            - repair
+            - science
+            - sneak
+            - speech
+            - survival
+            - unarmed
+    points:
+      name: Points
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 100
+
+choose_perk:
+  name: Choose perk
+  description: Pick a perk (available every 2 levels). Level/SPECIAL/skill requirements are enforced.
+  fields:
+    person:
+      name: Person
+      selector:
+        text:
+    perk:
+      name: Perk
+      required: true
+      selector:
+        text:
+    special_stat:
+      name: SPECIAL stat (for perks like Intense Training)
+      selector:
+        select:
+          options:
+            - strength
+            - perception
+            - endurance
+            - charisma
+            - intelligence
+            - agility
+            - luck
+
+start_review:
+  name: Start weekly review
+  description: Start a weekly review. The checklist is checked automatically.
+  fields:
+    person:
+      name: Person
+      selector:
+        text:
+
+complete_review:
+  name: Complete weekly review
+  description: Complete the open weekly review and collect the automatically calculated bonus XP/Caps.
+  fields:
+    person:
+      name: Person
+      selector:
+        text:
+
+redeem_reward:
+  name: Redeem reward
+  description: Spend caps on a configured reward. Fires gamified_gtd_reward_redeemed.
+  fields:
+    person:
+      name: Person
+      selector:
+        text:
+    reward:
+      name: Reward id
+      required: true
+      selector:
+        text:
+
+get_state:
+  name: Get state
+  description: Return the full FNV profile (level, xp, karma, caps, SPECIAL, skills, perks, quests) as response.
+  response:
+    person:
+      description: person entity id
+    level:
+      description: current level
+    xp:
+      description: total XP
+    xp_to_next:
+      description: XP needed for the next level
+    skill_points_available:
+      description: unspent skill points
+    perk_choice_pending:
+      description: whether a perk choice is open
+    karma:
+      description: karma value (-100..+100)
+    karma_title:
+      description: FNV-style karma title
+    caps:
+      description: current caps balance
+    hp:
+      description: derived hit points (95 + 20*END + 5*level)
+    special:
+      description: the 7 SPECIAL attributes
+    skills:
+      description: the 13 skills
+    perks:
+      description: chosen perks
+    review_streak:
+      description: consecutive on-time reviews
+    review_due:
+      description: whether a weekly review is due
+    quests:
+      description: list of quests with x/y progress
+  fields:
+    person:
+      name: Person
+      selector:
+        text:
