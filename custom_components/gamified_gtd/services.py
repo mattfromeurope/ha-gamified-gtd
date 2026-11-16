@@ -1,4 +1,10 @@
-"""Service registrations for Gamified GTD."""
+"""Service registrations for Gamified GTD.
+
+All 15 services of the `gamified_gtd` domain are registered once (guarded by
+`hass.services.has_service`) and delegate to the manager of the first config entry.
+Each registration carries a voluptuous schema so the HA UI shows proper form fields;
+the human-readable descriptions live in services.yaml.
+"""
 
 from __future__ import annotations
 
@@ -28,10 +34,13 @@ from .const import (
 )
 from . import get_manager
 
+# Shared field block: every task-addressing service takes a task_id.
 TASK_FIELDS = {
     vol.Required("task_id"): cv.string,
 }
 
+# add_to_inbox: quick capture with all optional task fields (incl. reminders /
+# location / overdue_repeat for the notification scheduler and the target list).
 ADD_TO_INBOX_SCHEMA = vol.Schema(
     {
         vol.Required("title"): cv.string,
@@ -54,6 +63,7 @@ ADD_TO_INBOX_SCHEMA = vol.Schema(
     }
 )
 
+# clarify: decision = next_action / project / waiting_for / someday / done.
 CLARIFY_SCHEMA = vol.Schema(
     {
         **TASK_FIELDS,
@@ -69,6 +79,7 @@ CLARIFY_SCHEMA = vol.Schema(
     }
 )
 
+# update_task: any subset of task fields.
 UPDATE_TASK_SCHEMA = vol.Schema(
     {
         **TASK_FIELDS,
@@ -92,6 +103,7 @@ UPDATE_TASK_SCHEMA = vol.Schema(
     }
 )
 
+# create_project: a quest with name / desired outcome / optional deadline.
 CREATE_PROJECT_SCHEMA = vol.Schema(
     {
         vol.Required("name"): cv.string,
@@ -100,6 +112,7 @@ CREATE_PROJECT_SCHEMA = vol.Schema(
     }
 )
 
+# add_to_project: attach a task to a quest.
 ADD_TO_PROJECT_SCHEMA = vol.Schema(
     {
         **TASK_FIELDS,
@@ -107,6 +120,7 @@ ADD_TO_PROJECT_SCHEMA = vol.Schema(
     }
 )
 
+# allocate_skill_points: person + skill + points (FNV level-up points).
 ALLOCATE_SKILL_POINTS_SCHEMA = vol.Schema(
     {
         vol.Optional("person"): cv.string,
@@ -115,6 +129,7 @@ ALLOCATE_SKILL_POINTS_SCHEMA = vol.Schema(
     }
 )
 
+# choose_perk: perk id + optional special_stat (Intense Training) / skill (Tag!).
 CHOOSE_PERK_SCHEMA = vol.Schema(
     {
         vol.Optional("person"): cv.string,
@@ -124,6 +139,7 @@ CHOOSE_PERK_SCHEMA = vol.Schema(
     }
 )
 
+# redeem_reward: spend caps on a shop reward.
 REDEEM_REWARD_SCHEMA = vol.Schema(
     {
         vol.Optional("person"): cv.string,
@@ -131,11 +147,13 @@ REDEEM_REWARD_SCHEMA = vol.Schema(
     }
 )
 
+# person-only services (start/complete review, get_state).
 PERSON_ONLY_SCHEMA = vol.Schema({vol.Optional("person"): cv.string})
 
 
 async def async_setup_services(hass: HomeAssistant) -> None:
-    """Register all gamified_gtd services (once)."""
+    """Register all gamified_gtd services (once — guarded so multiple entries don't
+    double-register). Each handler resolves the manager and forwards the call."""
     if hass.services.has_service(DOMAIN, SERVICE_ADD_TO_INBOX):
         return
 
@@ -224,7 +242,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
 
 async def async_unload_services(hass: HomeAssistant) -> None:
-    """Remove all gamified_gtd services."""
+    """Remove all gamified_gtd services (when the last config entry is unloaded)."""
     for service in (
         SERVICE_ADD_TO_INBOX,
         SERVICE_CLARIFY,

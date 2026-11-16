@@ -23,11 +23,17 @@ LIST_OPTIONS = ["inbox", "next_actions", "waiting_for", "someday_maybe"]
 
 
 def _call(data: dict[str, Any]):
+    """Wrap a plain dict as a ServiceCall-like object (the manager only uses .data)."""
     return SimpleNamespace(data=data)
 
 
 class GamifiedGTDAPI(llm.API):
-    """Tool set exposed to LLM conversation agents."""
+    """Tool set exposed to LLM conversation agents.
+
+    Registered once in async_setup via llm.async_register_api; HA shows it in the
+    agent's 'Control Home Assistant' tool list. Every tool delegates to the manager,
+    so behavior is identical to services and cards.
+    """
 
     def __init__(self, hass: HomeAssistant) -> None:
         super().__init__(
@@ -38,12 +44,14 @@ class GamifiedGTDAPI(llm.API):
         )
 
     def _manager(self):
+        """The (first) manager instance — tools operate on the first config entry."""
         managers = self.hass.data[DOMAIN].get("managers", [])
         if not managers:
             raise ValueError("Gamified GTD is not set up")
         return managers[0]
 
     async def async_get_tools(self, context: llm.Context) -> list[llm.Tool]:
+        """Declare all tools with their parameter schemas (voluptuous -> JSON schema)."""
         return [
             llm.Tool(
                 name="list_tasks",
@@ -181,6 +189,7 @@ class GamifiedGTDAPI(llm.API):
         ]
 
     async def async_call_tool(self, tool: llm.Tool, args: dict[str, Any], context: llm.Context):
+        """Dispatch a tool call to the matching _tool_<name> method."""
         manager = self._manager()
         handler = getattr(self, f"_tool_{tool.name}", None)
         if handler is None:
@@ -192,6 +201,8 @@ class GamifiedGTDAPI(llm.API):
     # ------------------------------------------------------------------
 
     async def _tool_list_tasks(self, manager, args: dict[str, Any]) -> dict[str, Any]:
+        """list_tasks: filter tasks (list/assigned/tags/due/status), sort, and return
+        them with a ready-to-read 'speech' line for voice assistants."""
         from datetime import date, timedelta
 
         tasks = list(manager.data["tasks"].values())
@@ -254,9 +265,11 @@ class GamifiedGTDAPI(llm.API):
         return {"count": len(out), "tasks": out}
 
     async def _tool_add_task(self, manager, args: dict[str, Any]) -> dict[str, Any]:
+        """add_task: create a task (inbox by default) with all optional fields."""
         return await manager.add_to_inbox(_call(args))
 
     async def _tool_complete_task(self, manager, args: dict[str, Any]) -> dict[str, Any]:
+        """complete_task: by task_id, or by exact open-task title (+optional list)."""
         task_id = args.get("task_id")
         if not task_id:
             title = args.get("title")
@@ -275,27 +288,35 @@ class GamifiedGTDAPI(llm.API):
         return await manager.complete_task(_call({"task_id": task_id, "person": args.get("person")}))
 
     async def _tool_clarify_task(self, manager, args: dict[str, Any]) -> dict[str, Any]:
+        """clarify_task: process an inbox task (next_action/project/waiting_for/...)."""
         return await manager.clarify(_call(args))
 
     async def _tool_get_state(self, manager, args: dict[str, Any]) -> dict[str, Any]:
+        """get_state: full FNV profile (level/xp/karma/caps/SPECIAL/skills/perks/quests)."""
         return manager.get_state(_call({"person": args.get("person")}))
 
     async def _tool_allocate_skill_points(self, manager, args: dict[str, Any]) -> dict[str, Any]:
+        """allocate_skill_points: spend level-up skill points on a skill."""
         return await manager.allocate_skill_points(_call(args))
 
     async def _tool_choose_perk(self, manager, args: dict[str, Any]) -> dict[str, Any]:
+        """choose_perk: pick a perk when a choice is pending (requirements enforced)."""
         return await manager.choose_perk(_call(args))
 
     async def _tool_create_project(self, manager, args: dict[str, Any]) -> dict[str, Any]:
+        """create_project: start a quest (name / desired outcome / deadline)."""
         return await manager.create_project(_call(args))
 
     async def _tool_complete_project(self, manager, args: dict[str, Any]) -> dict[str, Any]:
+        """complete_project: finish a quest (automatic quest XP/caps payout)."""
         return await manager.complete_project(_call(args))
 
     async def _tool_review(self, manager, args: dict[str, Any]) -> dict[str, Any]:
+        """review: action=start -> start_review, action=complete -> complete_review."""
         if args["action"] == "start":
             return await manager.start_review(_call({"person": args.get("person")}))
         return await manager.complete_review(_call({"person": args.get("person")}))
 
     async def _tool_redeem_reward(self, manager, args: dict[str, Any]) -> dict[str, Any]:
+        """redeem_reward: spend caps on a shop reward."""
         return await manager.redeem_reward(_call(args))

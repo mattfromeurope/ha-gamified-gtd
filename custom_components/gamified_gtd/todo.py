@@ -17,7 +17,8 @@ from .manager import GTDManager
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    """Set up the four GTD todo lists."""
+    """Set up the four shared GTD todo lists (todo.gtd_inbox, ... — one entity per
+    GTD list, shared across persons like Better ToDo; assignment via attribute)."""
     manager: GTDManager = hass.data[DOMAIN][entry.entry_id]
     async_add_entities(
         GTDTodoListEntity(manager, list_key, name) for list_key, name in TODO_LISTS.items()
@@ -25,7 +26,14 @@ async def async_setup_entry(
 
 
 class GTDTodoListEntity(TodoListEntity):
-    """One todo entity per GTD list; writes through to the manager's storage."""
+    """One todo entity per GTD list; writes through to the manager's storage.
+
+    The todo entities are the Companion-App/calendar-compatible mirror: HA's built-in
+    todo card works on them, and completing an item routes through
+    complete_task so XP/Caps/Karma are awarded even without the custom card.
+    Rich task fields (assigned_to, context, priority, ...) are exposed as entity
+    attributes under 'tasks' keyed by task id.
+    """
 
     _attr_supported_features = (
         TodoListEntityFeature.CREATE_TODO_ITEM
@@ -50,6 +58,7 @@ class GTDTodoListEntity(TodoListEntity):
 
     @property
     def todo_items(self) -> list[TodoItem] | None:
+        """Build HA TodoItems from the manager's tasks of this list."""
         items = []
         for task in self._manager.data["tasks"].values():
             if task["list"] != self._list_key:
@@ -69,6 +78,8 @@ class GTDTodoListEntity(TodoListEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
+        """Per-task metadata (assigned_to, context, project, priority, time, energy,
+        tags, status) keyed by task id — read by the custom tasks card."""
         tasks = {
             task["id"]: {
                 "assigned_to": task.get("assigned_to"),
@@ -86,6 +97,7 @@ class GTDTodoListEntity(TodoListEntity):
         return {"tasks": tasks}
 
     async def async_create_todo_item(self, item: TodoItem) -> None:
+        """HA todo 'add item' -> creates the task via the manager (in this list)."""
         await self._manager.add_to_inbox(
             ServiceCall(
                 DOMAIN,
@@ -100,6 +112,8 @@ class GTDTodoListEntity(TodoListEntity):
         )
 
     async def async_update_todo_item(self, item: TodoItem) -> None:
+        """HA todo 'update item': completing routes through complete_task (gamification!),
+        reopening sets the task back to open."""
         if item.status == TodoItemStatus.COMPLETED:
             await self._manager.complete_task(
                 ServiceCall(DOMAIN, "complete_task", {"task_id": item.uid})
@@ -111,6 +125,7 @@ class GTDTodoListEntity(TodoListEntity):
             await self._manager._save()
 
     async def async_delete_todo_items(self, uids: list[str]) -> None:
+        """HA todo 'remove items' -> delete via the manager."""
         for uid in uids:
             if uid in self._manager.data["tasks"]:
                 await self._manager.remove_task(

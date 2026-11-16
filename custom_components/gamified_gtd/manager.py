@@ -1,4 +1,18 @@
-"""Core manager: storage and business logic for Gamified GTD."""
+"""Core manager: storage and business logic for Gamified GTD.
+
+The manager owns the whole data model (profiles, tasks, projects/quests, reviews,
+rewards) in one versioned Store and implements every service's logic:
+
+- GTD flow: add_to_inbox / clarify / update_task / skip_task / remove_task / complete_task
+- Gamification: _award_xp (FNV level curve), allocate_skill_points, choose_perk
+- Quests: create_project / add_to_project / complete_project (auto rewards)
+- Weekly review: start_review / complete_review (auto-checked checklist)
+- Caps shop: redeem_reward
+- get_state for cards / LLM tools / automations
+
+Every mutation ends in `_save()`, which persists and fires EVENT_DATA_UPDATED so
+entities and the notification scheduler refresh.
+"""
 
 from __future__ import annotations
 
@@ -50,57 +64,76 @@ from .const import (
 
 
 def _new_id() -> str:
+    """Short unique id for tasks/projects/reviews (12 hex chars)."""
     return uuid.uuid4().hex[:12]
 
 
 def _now_iso() -> str:
+    """Current local time as ISO string (used for created/completed timestamps)."""
     return dt_util.now().isoformat()
 
 
 def _parse_date(value: str | None) -> date | None:
+    """Parse an ISO date string (YYYY-MM-DD); None stays None."""
     if not value:
         return None
     return date.fromisoformat(value)
 
 
 class GTDManager:
-    """Holds all data and implements the services' logic."""
+    """Holds all data and implements the services' logic.
+
+    `data` layout:
+      profiles: {person_entity_id: profile dict}   (SPECIAL, skills, xp, level, karma, caps, perks, ...)
+      tasks:    {task_id: task dict}               (list, status, due, reminders, project_id, ...)
+      projects: {project_id: quest dict}           (name, desired_outcome, task_ids, status, due)
+      reviews:  {review_id: review dict}           (person, started/completed, checklist snapshot)
+      rewards:  [reward dict]                      (fallback if options don't define any)
+    """
 
     def __init__(self, hass: HomeAssistant, entry_id: str, options: dict[str, Any]) -> None:
         self.hass = hass
         self.entry_id = entry_id
         self._options = options
+        # Store = HA's versioned JSON storage in .storage (included in HA backups).
         self._store: Store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
         self.data: dict[str, Any] = {}
 
     @property
     def options(self) -> dict[str, Any]:
+        """The entry's merged options (config flow data + options flow)."""
         return self._options
 
     @property
     def level_cap(self) -> int:
+        """FNV level cap: 50 with 'all DLCs', 30 for the 'base game'."""
         return int(self._options.get(CONF_LEVEL_CAP, DEFAULT_LEVEL_CAP))
 
     @property
     def default_time_estimate(self) -> float:
+        """Fallback time estimate (minutes) for tasks without their own value."""
         return float(self._options.get(CONF_DEFAULT_TIME_ESTIMATE, DEFAULT_TIME_ESTIMATE))
 
     @property
     def default_energy(self) -> int:
+        """Fallback energy (1-5) for tasks without their own value."""
         return int(self._options.get(CONF_DEFAULT_ENERGY, DEFAULT_ENERGY))
 
     @property
     def xp_base(self) -> int:
+        """Configurable XP base for the task XP formula."""
         return int(self._options.get(CONF_DEFAULT_XP_BASE, DEFAULT_XP_BASE))
 
     @property
     def rewards(self) -> list[dict[str, Any]]:
+        """Reward shop: options win; otherwise the stored defaults (editable there)."""
         rewards = self._options.get(CONF_REWARDS)
         if rewards is None:
             return [dict(r) for r in self.data.get("rewards", DEFAULT_REWARDS)]
         return list(rewards)
 
     async def async_load(self) -> None:
+        """Load the store (or initialize empty data), ensure profiles, persist once."""
         stored = await self._store.async_load()
         if stored is None:
             self.data = self._initial_data()
@@ -110,6 +143,7 @@ class GTDManager:
         await self._save()
 
     def _initial_data(self) -> dict[str, Any]:
+        """Empty data structure for a fresh install."""
         return {
             "profiles": {},
             "tasks": {},
@@ -119,6 +153,8 @@ class GTDManager:
         }
 
     def _ensure_profiles(self) -> None:
+        """Create a profile for every configured person and apply the SPECIAL/Tag!
+        setup from the options flow (stored under the "_profiles" key)."""
         option_profiles = self._options.get("_profiles", {})
         for person in self._options.get(CONF_PERSONS, []):
             if person not in self.data["profiles"]:
@@ -134,6 +170,7 @@ class GTDManager:
                     profile["tagged_skills"] = list(setup["tagged_skills"])
 
     def _new_profile(self, person: str) -> dict[str, Any]:
+        """Fresh FNV profile: all SPECIAL at 5, no XP/level/karma/caps/perks yet."""
         name = person.split(".", 1)[-1]
         return {
             "person": person,
@@ -155,6 +192,7 @@ class GTDManager:
         }
 
     async def _save(self) -> None:
+        """Persist the data and notify all listeners (entities, scheduler) via event."""
         await self._store.async_save(self.data)
         self.hass.bus.async_fire(EVENT_DATA_UPDATED, {"entry_id": self.entry_id})
 
@@ -163,6 +201,8 @@ class GTDManager:
     # ------------------------------------------------------------------
 
     def get_profile(self, person: str | None) -> dict[str, Any]:
+        """Resolve a profile: explicit person, else the configured default profile,
+        else the first profile. Raises when nothing is configured."""
         profiles = self.data["profiles"]
         if person and person in profiles:
             return profiles[person]
@@ -176,6 +216,7 @@ class GTDManager:
         raise ValueError("No profiles configured")
 
     def profile_hp(self, profile: dict[str, Any]) -> int:
+        """HP derived stat (95 + 20*END + 5*level) including perk HP bonuses."""
         return g.hit_points(
             profile["special"]["endurance"],
             profile["level"],
@@ -183,6 +224,7 @@ class GTDManager:
         )
 
     def effective_skills(self, profile: dict[str, Any]) -> dict[str, int]:
+        """Compute all 13 skills via the FNV formula (base + allocated + Tag!)."""
         special = profile["special"]
         tagged = set(profile.get("tagged_skills", []))
         return {
@@ -196,6 +238,7 @@ class GTDManager:
         }
 
     def _profile_from_call(self, call: ServiceCall) -> dict[str, Any]:
+        """Profile for a service call: explicit `person` param or the default profile."""
         return self.get_profile(call.data.get("person"))
 
     # ------------------------------------------------------------------
@@ -204,6 +247,8 @@ class GTDManager:
 
     @staticmethod
     def _normalize_reminders(value: Any) -> list[int]:
+        """Accept reminders as list of ints or as comma/semicolon separated string
+        (e.g. "60, 1440") and normalize to a list of int minutes."""
         if not value:
             return []
         if isinstance(value, str):
@@ -211,6 +256,8 @@ class GTDManager:
         return [int(v) for v in value]
 
     def _new_task(self, title: str, call_data: dict[str, Any]) -> dict[str, Any]:
+        """Build a task dict from service payload; missing time/energy fall back to
+        the configured defaults."""
         return {
             "id": _new_id(),
             "title": title,
@@ -236,12 +283,14 @@ class GTDManager:
         }
 
     def get_task(self, task_id: str) -> dict[str, Any]:
+        """Look up a task by id; raises ValueError for unknown ids."""
         task = self.data["tasks"].get(task_id)
         if task is None:
             raise ValueError(f"Unknown task: {task_id}")
         return task
 
     async def add_to_inbox(self, call: ServiceCall) -> dict[str, Any]:
+        """Quick capture: creates the task in the inbox (or `list` if given)."""
         task = self._new_task(
             call.data["title"], {**call.data, "list": call.data.get("list", LIST_INBOX)}
         )
@@ -250,6 +299,9 @@ class GTDManager:
         return {"task_id": task["id"]}
 
     async def clarify(self, call: ServiceCall) -> dict[str, Any]:
+        """GTD 'clarify' step: move an inbox task to next_actions (optionally with
+        context / into a project), waiting_for, someday — or complete it directly
+        (2-minute rule)."""
         task = self.get_task(call.data["task_id"])
         decision = call.data["decision"]
         if decision == "done":
@@ -282,6 +334,7 @@ class GTDManager:
         return {"task_id": task["id"], "list": task["list"]}
 
     async def update_task(self, call: ServiceCall) -> dict[str, Any]:
+        """Update any task field; only keys present in the call are changed."""
         task = self.get_task(call.data["task_id"])
         for key in (
             "title",
@@ -311,12 +364,14 @@ class GTDManager:
         return {"task_id": task["id"]}
 
     async def skip_task(self, call: ServiceCall) -> dict[str, Any]:
+        """Move a task to waiting_for (e.g. delegated)."""
         task = self.get_task(call.data["task_id"])
         task["list"] = "waiting_for"
         await self._save()
         return {"task_id": task["id"]}
 
     async def remove_task(self, call: ServiceCall) -> None:
+        """Delete a task and detach it from its project's step list."""
         task_id = call.data["task_id"]
         task = self.get_task(task_id)
         if task.get("project_id"):
@@ -327,12 +382,22 @@ class GTDManager:
         await self._save()
 
     async def complete_task(self, call: ServiceCall) -> dict[str, Any]:
+        """Complete a task — the heart of the gamification.
+
+        - XP is ALWAYS granted (even overdue), computed from priority/time/energy,
+          the on-time bonus (+25%), the karma modifier (+/-10%) and perk multipliers.
+        - Caps are only granted when the task is NOT overdue (1 cap / 10 XP).
+        - Karma: +1 when completed on/before due, -1 when > 7 days overdue.
+        - Level-ups are processed, events fired, and if the task was the last open
+          step of a quest, the quest completes automatically.
+        """
         task = self.get_task(call.data["task_id"])
         if task["status"] == TASK_DONE:
             return {"task_id": task["id"], "already_done": True}
         task["status"] = TASK_DONE
         task["completed_at"] = _now_iso()
 
+        # XP goes to the assigned person; unassigned -> caller's person or default profile.
         profile = self.get_profile(task.get("assigned_to") or call.data.get("person"))
         today = dt_util.now().date()
         due = _parse_date(task.get("due"))
@@ -340,6 +405,7 @@ class GTDManager:
         on_time = due is not None and due >= today
         days_overdue = (today - due).days if overdue else 0
 
+        # XP formula: base * priority * effort(time, energy), on-time bonus, karma, perks.
         xp = g.task_xp(
             priority=task.get("priority", 3),
             time_estimate=task.get("time_estimate", self.default_time_estimate),
@@ -349,16 +415,19 @@ class GTDManager:
             xp_base=self.xp_base,
             xp_multiplier=g.xp_multiplier(profile["perks"]),
         )
+        # Caps only when not overdue (decided in the design discussion).
         caps = 0
         if not overdue:
             caps = round(g.caps_from_xp(xp) * g.caps_multiplier(profile["perks"]))
 
+        # Karma: reward on-time completion, punish long-overdue completion.
         if due is not None:
             if on_time:
                 profile["karma"] = g.clamp_karma(profile["karma"] + 1)
             elif days_overdue > OVERDUE_KARMA_DAYS:
                 profile["karma"] = g.clamp_karma(profile["karma"] - 1)
 
+        # Remember the XP for the quest bonus calculation later.
         task["xp_awarded"] = xp
         level_ups = await self._award_xp(profile, xp)
         profile["caps"] += caps
@@ -384,9 +453,16 @@ class GTDManager:
     # ------------------------------------------------------------------
 
     async def _award_xp(self, profile: dict[str, Any], xp: int) -> list[int]:
+        """Add XP and process all resulting level-ups (FNV curve, up to the cap).
+
+        Each level-up grants skill points (10 + 0.5*INT, + perk bonuses); every even
+        level opens a perk choice (perk_choice_pending). Fires level_up / perk_available.
+        Returns the list of new levels.
+        """
         profile["xp"] += xp
         level_ups: list[int] = []
         cap = self.level_cap
+        # Loop because one big XP gain (quest/review bonus) can skip multiple levels.
         while profile["level"] < cap and profile["xp"] >= g.cumulative_xp_for_level(
             profile["level"] + 1, cap
         ):
@@ -415,6 +491,8 @@ class GTDManager:
         return level_ups
 
     async def allocate_skill_points(self, call: ServiceCall) -> dict[str, Any]:
+        """Spend available skill points on one skill (FNV 1:1: skills only grow via
+        level-up points, never directly from tasks)."""
         profile = self._profile_from_call(call)
         skill = call.data["skill"]
         points = int(call.data["points"])
@@ -433,6 +511,10 @@ class GTDManager:
         }
 
     async def choose_perk(self, call: ServiceCall) -> dict[str, Any]:
+        """Pick a perk when a choice is pending (every 2nd level). FNV requirements
+        (level/SPECIAL/skill/perk prereq/ranks) are enforced. Handles the mechanical
+        effects: special_plus (needs special_stat), tag_skill (needs skill),
+        instant_level (Here and Now)."""
         profile = self._profile_from_call(call)
         perk_id = call.data["perk"]
         perk = g.PERKS_BY_ID.get(perk_id)
@@ -475,6 +557,8 @@ class GTDManager:
     def _create_project(
         self, name: str, desired_outcome: str, due: str | None
     ) -> str:
+        """Create a project (quest) dict and return its id. Used by the service and
+        by clarify (decision=project)."""
         project = {
             "id": _new_id(),
             "name": name,
@@ -489,6 +573,7 @@ class GTDManager:
         return project["id"]
 
     async def create_project(self, call: ServiceCall) -> dict[str, Any]:
+        """Service: create a quest (project) with name / desired outcome / deadline."""
         project_id = self._create_project(
             call.data["name"], call.data.get("desired_outcome", ""), call.data.get("due")
         )
@@ -496,6 +581,7 @@ class GTDManager:
         return {"project_id": project_id}
 
     async def add_to_project(self, call: ServiceCall) -> dict[str, Any]:
+        """Attach a task to a quest (moves it to next_actions; reopens a completed quest)."""
         task = self.get_task(call.data["task_id"])
         project = self.data["projects"].get(call.data["project_id"])
         if project is None:
@@ -511,12 +597,14 @@ class GTDManager:
         return {"project_id": project["id"], "task_id": task["id"]}
 
     def quest_progress(self, project: dict[str, Any]) -> tuple[int, int]:
+        """Quest progress as (done steps, total steps) — the Pip-Boy 'x/y' display."""
         steps = [self.data["tasks"].get(tid) for tid in project["task_ids"]]
         steps = [t for t in steps if t]
         done = sum(1 for t in steps if t["status"] == TASK_DONE)
         return done, len(steps)
 
     async def _maybe_complete_project(self, project_id: str) -> None:
+        """Auto-complete a quest when its last open step was just completed."""
         project = self.data["projects"].get(project_id)
         if project is None or project["status"] != PROJECT_ACTIVE:
             return
@@ -526,6 +614,7 @@ class GTDManager:
             await self._complete_project(project, automatic=True)
 
     async def complete_project(self, call: ServiceCall) -> dict[str, Any]:
+        """Service: complete a quest manually (even with open steps)."""
         project = self.data["projects"].get(call.data["project_id"])
         if project is None:
             raise ValueError(f"Unknown project: {call.data['project_id']}")
@@ -534,6 +623,10 @@ class GTDManager:
     async def _complete_project(
         self, project: dict[str, Any], automatic: bool
     ) -> dict[str, Any]:
+        """Quest completion: rewards are calculated AUTOMATICALLY (never configured
+        per quest): quest XP = sum of step XP + 25 XP per step, +25% when finished
+        before the quest deadline. Caps derive via 1 cap / 10 XP. XP goes to the
+        default profile (quests are shared)."""
         project["status"] = PROJECT_DONE
         project["completed_at"] = _now_iso()
         done, total = self.quest_progress(project)
@@ -575,6 +668,9 @@ class GTDManager:
     # ------------------------------------------------------------------
 
     def review_checklist_state(self) -> dict[str, bool]:
+        """Auto-checked weekly review checklist (decided in the design): inbox empty,
+        next actions current (none untouched for 7+ days). The remaining GTD items are
+        review habits and stay true (checked off by doing the review)."""
         tasks = list(self.data["tasks"].values())
         inbox_open = any(t["list"] == LIST_INBOX and t["status"] == TASK_OPEN for t in tasks)
         week_ago = (dt_util.now() - timedelta(days=REVIEW_INTERVAL_DAYS)).isoformat()
@@ -594,6 +690,8 @@ class GTDManager:
         }
 
     def review_due(self, profile: dict[str, Any]) -> bool:
+        """A review is due when none was completed within the interval (default 7 days);
+        a fresh profile is always due."""
         last = profile.get("last_review_completed")
         if last is None:
             return True
@@ -601,6 +699,8 @@ class GTDManager:
         return dt_util.now() - last_dt >= timedelta(days=REVIEW_INTERVAL_DAYS)
 
     async def start_review(self, call: ServiceCall) -> dict[str, Any]:
+        """Start a weekly review: creates a review instance with the current
+        auto-checked checklist snapshot."""
         profile = self._profile_from_call(call)
         review = {
             "id": _new_id(),
@@ -614,6 +714,9 @@ class GTDManager:
         return {"review_id": review["id"], "checklist": review["checklist"]}
 
     async def complete_review(self, call: ServiceCall) -> dict[str, Any]:
+        """Complete the open review: overdue reviews cost karma (-1 per week) and reset
+        the streak; on-time reviews build it. Bonus = 100 XP * streak (karma-scaled),
+        caps via 1/10 rule. Fires review_completed."""
         profile = self._profile_from_call(call)
         open_reviews = [
             r
@@ -666,6 +769,9 @@ class GTDManager:
     # ------------------------------------------------------------------
 
     async def redeem_reward(self, call: ServiceCall) -> dict[str, Any]:
+        """Spend caps on a shop reward. Checks the balance, deducts, fires
+        reward_redeemed — the actual 'payout' (notification, automation) is wired
+        by the user via the event."""
         profile = self._profile_from_call(call)
         reward_id = call.data["reward"]
         reward = next((r for r in self.rewards if r["id"] == reward_id), None)
@@ -694,6 +800,8 @@ class GTDManager:
     # ------------------------------------------------------------------
 
     def get_state(self, call: ServiceCall) -> dict[str, Any]:
+        """Full profile snapshot as response data — used by cards, LLM tools and
+        automations (get_state service)."""
         profile = self._profile_from_call(call)
         cap = self.level_cap
         quests = []

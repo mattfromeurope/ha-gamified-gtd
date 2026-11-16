@@ -17,9 +17,10 @@ from .manager import GTDManager
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    """Set up profile sensors and the quest log."""
+    """Set up the seven per-person profile sensors, the quest log and the rewards shop."""
     manager: GTDManager = hass.data[DOMAIN][entry.entry_id]
     entities: list[SensorEntity] = []
+    # One set of sensors per configured person (sensor.<name>_level, ..._hp, ...).
     for person in manager.data["profiles"]:
         name = manager.data["profiles"][person]["name"]
         entities.extend(
@@ -39,7 +40,11 @@ async def async_setup_entry(
 
 
 class GTDProfileSensor(SensorEntity):
-    """Base class for per-person sensors."""
+    """Base class for per-person sensors.
+
+    No polling: every sensor subscribes to EVENT_DATA_UPDATED and rewrites its state
+    whenever the manager saves.
+    """
 
     _attr_should_poll = False
 
@@ -51,19 +56,25 @@ class GTDProfileSensor(SensorEntity):
 
     @callback
     def _handle_update(self, event) -> None:
+        """Refresh on any data update."""
         self.async_write_ha_state()
 
     async def async_added_to_hass(self) -> None:
+        """Subscribe to data updates for the lifetime of the entity."""
         self.async_on_remove(
             self.hass.bus.async_listen(EVENT_DATA_UPDATED, self._handle_update)
         )
 
     @property
     def profile(self) -> dict[str, Any]:
+        """The current profile dict of this sensor's person."""
         return self._manager.data["profiles"][self._person]
 
 
 class LevelSensor(GTDProfileSensor):
+    """Level sensor: state = level; attributes carry XP progress, skill points,
+    pending perk choice, currently available perks, review state and checklist."""
+
     def __init__(self, manager, person, name):
         super().__init__(manager, person, name, "Level")
 
@@ -73,6 +84,9 @@ class LevelSensor(GTDProfileSensor):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
+        """XP bar values (xp_in_level / xp_level_span for the card progress bar),
+        available perks with name+description (for the choose-perk dialog),
+        review due state, auto-checked checklist and streak."""
         cap = self._manager.level_cap
         level = self.profile["level"]
         skills = self._manager.effective_skills(self.profile)
@@ -109,6 +123,8 @@ class LevelSensor(GTDProfileSensor):
 
 
 class HPSensor(GTDProfileSensor):
+    """HP derived stat (95 + 20*END + 5*level + perk bonuses) — Pip-Boy flavor."""
+
     def __init__(self, manager, person, name):
         super().__init__(manager, person, name, "HP")
 
@@ -118,6 +134,8 @@ class HPSensor(GTDProfileSensor):
 
 
 class KarmaSensor(GTDProfileSensor):
+    """Karma: state = FNV-style title, attribute 'karma' = the -100..+100 value."""
+
     def __init__(self, manager, person, name):
         super().__init__(manager, person, name, "Karma")
 
@@ -140,6 +158,8 @@ class CapsSensor(GTDProfileSensor):
 
 
 class SpecialSensor(GTDProfileSensor):
+    """The 7 SPECIAL attributes as state attributes."""
+
     def __init__(self, manager, person, name):
         super().__init__(manager, person, name, "SPECIAL")
 
@@ -153,6 +173,8 @@ class SpecialSensor(GTDProfileSensor):
 
 
 class SkillsSensor(GTDProfileSensor):
+    """The 13 FNV skills (computed via the formula) as state attributes."""
+
     def __init__(self, manager, person, name):
         super().__init__(manager, person, name, "Skills")
 
@@ -166,6 +188,8 @@ class SkillsSensor(GTDProfileSensor):
 
 
 class PerksSensor(GTDProfileSensor):
+    """Chosen perks: state = count, attributes = ids + display names."""
+
     def __init__(self, manager, person, name):
         super().__init__(manager, person, name, "Perks")
 
@@ -183,7 +207,8 @@ class PerksSensor(GTDProfileSensor):
 
 
 class RewardsSensor(SensorEntity):
-    """The caps reward shop (configurable in the options)."""
+    """The caps reward shop (sensor.gtd_rewards): state = number of rewards,
+    attribute 'rewards' = the full list (id/name/description/cost) for the shop card."""
 
     _attr_should_poll = False
     _attr_name = "GTD Rewards"
@@ -211,7 +236,8 @@ class RewardsSensor(SensorEntity):
 
 
 class QuestLogSensor(SensorEntity):
-    """Quest log: active and completed projects with x/y progress."""
+    """Quest log (sensor.gtd_quest_log): state = number of active quests,
+    attribute 'quests' = {project_id: {name, desired_outcome, status, progress, due}}."""
 
     _attr_should_poll = False
     _attr_name = "GTD Quest Log"

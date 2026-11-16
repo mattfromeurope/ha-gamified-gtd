@@ -1,18 +1,32 @@
 """All 88 regular Fallout: New Vegas perks with their requirements — pure data, no HA imports.
 
-Requirements are 1:1 from the game (level, SPECIAL, skill, perk prerequisites).
-`requires_any` holds alternative conditions, each a dict like {"skill": "guns", "value": 45}
-or {"special": "agility", "value": 5}. `requires_special_max` means "SPECIAL below value"
-(e.g. Weapon Handling: Strength below 10).
+Source: FNV per-level perk tables (levels 2-28; level 30+ adds no new regular perks).
+The four gender-locked perks (Confirmed Bachelor / Cherchez la Femme / Lady Killer /
+Black Widow) and the Action Boy/Action Girl pair are listed individually so the count
+is exactly the game's 88 regular perks. Gender does not exist in HA, so all variants
+are simply selectable.
 
-`effect` maps the perk to integration mechanics where it translates:
-  - xp_multiplier / caps_multiplier: multiplicative per rank (list entries stack)
-  - skill_points_per_level: extra skill points on every level-up
-  - special_plus: +1 to a chosen SPECIAL stat (Intense Training)
-  - hp_bonus: flat HP bonus (Life Giver)
-  - instant_level: immediately gain one level (Here and Now)
-  - tag_skill: tag one additional skill (+15) (Tag!)
-  - flavor: no direct mechanical translation (combat/dialogue perks) — still selectable 1:1
+Each entry is a `Perk` dataclass:
+  id                   snake_case id used by services/LLM tools/cards
+  name, description    display name + what the perk does in the game
+  min_level            minimum character level (set via _LEVEL_BY_ID below, even 2-28)
+  max_ranks            how often it can be taken (Intense Training 10, Swift Learner 3, ...)
+  requires_special     SPECIAL minimums, e.g. {"intelligence": 4}
+  requires_skill       skill minimums, e.g. {"sneak": 30}
+  requires_any         tuple of alternative conditions, each a dict like
+                       {"skill": "guns", "value": 45} or {"special": "agility", "value": 5}
+                       (Run 'n Gun: Guns 45 OR Energy Weapons 45)
+  requires_special_max SPECIAL maximums ("below value"), e.g. Weapon Handling: STR < 10
+  requires_perk        another perk that must be owned first (Ghastly Scavenger -> Cannibal)
+  effect               mapping to integration mechanics where it translates:
+    - xp_multiplier / caps_multiplier: multiplicative per rank (owned-list entries stack)
+    - skill_points_per_level: extra skill points on every level-up (Educated, Comprehension)
+    - special_plus: +1 to a chosen SPECIAL stat (Intense Training; stat via service param)
+    - hp_bonus: flat HP bonus (Life Giver)
+    - instant_level: immediately gain one level (Here and Now)
+    - tag_skill: tag one additional skill, +15 (Tag!; skill via service param)
+    - flavor: combat/dialogue perk with no direct mechanical translation — still
+      selectable 1:1 with enforced requirements and shown in the perks sensor/card
 """
 
 from __future__ import annotations
@@ -341,7 +355,8 @@ PERKS: list[Perk] = [
 
 
 
-# Minimum level requirement per perk (FNV: perks unlock at even levels 2-28)
+# Minimum level requirement per perk id (FNV: new perks unlock at every even
+# level from 2 up to 28; the dict below applies them to the entries above).
 _LEVEL_BY_ID = {
     # level 2
     "confirmed_bachelor": 2, "chez_la_femme": 2, "lady_killer": 2, "black_widow": 2,
@@ -386,5 +401,6 @@ _LEVEL_BY_ID = {
     "rad_absorption": 28,
 }
 
+# Apply the level requirements to the frozen dataclass entries, then index by id.
 PERKS = [replace(perk, min_level=_LEVEL_BY_ID[perk.id]) for perk in PERKS]
 PERKS_BY_ID = {perk.id: perk for perk in PERKS}

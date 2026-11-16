@@ -12,6 +12,8 @@ const DOMAIN = "gamified_gtd";
 const STATIC = `/${DOMAIN}_static`;
 const ICONS = `${STATIC}/gamified_gtd_icons`;
 
+// The 7 S.P.E.C.I.A.L. attributes with their text-glyph fallback (used when no
+// custom icon file exists — see gamified_gtd_icons/README.md).
 const SPECIAL = [
   { id: "strength", fb: "S" },
   { id: "perception", fb: "P" },
@@ -22,6 +24,7 @@ const SPECIAL = [
   { id: "luck", fb: "L" },
 ];
 
+// The 13 FNV skills with short text-glyph fallbacks.
 const SKILLS = [
   { id: "barter", fb: "Ba" }, { id: "energy_weapons", fb: "EW" },
   { id: "explosives", fb: "Ex" }, { id: "guns", fb: "Gu" },
@@ -32,6 +35,7 @@ const SKILLS = [
   { id: "unarmed", fb: "Un" },
 ];
 
+// GTD list key -> todo entity + display label.
 const LISTS = {
   inbox: { entity: "todo.gtd_inbox", label: "INBOX" },
   next_actions: { entity: "todo.gtd_next_actions", label: "NEXT ACTIONS" },
@@ -39,12 +43,15 @@ const LISTS = {
   someday_maybe: { entity: "todo.gtd_someday_maybe", label: "SOMEDAY/MAYBE" },
 };
 
+// person.alex -> "alex" (used to build sensor entity ids).
 function personName(person) {
   return (person || "").replace(/^person\./, "").replace(/\./g, "_");
 }
+// person entity id + suffix -> sensor entity id, e.g. sensor.alex_level.
 function sensorId(person, suffix) {
   return `sensor.${personName(person)}_${suffix}`;
 }
+// Resolve the person entity of the currently logged-in HA user (via user_id attr).
 function mePerson(hass) {
   const uid = hass && hass.user && hass.user.id;
   if (!uid) return null;
@@ -54,6 +61,8 @@ function mePerson(hass) {
   return p ? p.entity_id : null;
 }
 
+// Icon helper: tries <kind>/<id>.png from the user drop-in folder first; on load the
+// text fallback is removed, on error the <img> removes itself and the fallback stays.
 function icon(kind, id, fallback) {
   const src = `${ICONS}/${kind}/${id}.png`;
   return html`<span class="gicon"
@@ -142,6 +151,7 @@ const pipCss = css`
   .empty { color: var(--pip-dim); font-style: italic; text-transform: none; }
 `;
 
+// Call a gamified_gtd service — the ONLY write path from cards (thin-frontend rule).
 function svc(hass, service, data) {
   return hass.callService(DOMAIN, service, data);
 }
@@ -151,6 +161,8 @@ function svc(hass, service, data) {
 /* ------------------------------------------------------------------ */
 
 class GamifiedGTDStatsCard extends LitElement {
+  // Pip-Boy stats card: level/XP bar, HP, karma, caps, SPECIAL, skills, perks +
+  // dialogs for skill point allocation and perk choice (config: person, title).
   static get properties() {
     return { hass: {}, config: {}, _dlg: {} };
   }
@@ -164,6 +176,7 @@ class GamifiedGTDStatsCard extends LitElement {
   getCardSize() {
     return 6;
   }
+  // Shortcut: state object of this person's sensor with the given suffix.
   _s(suffix) {
     return this.hass.states[sensorId(this.config.person, suffix)];
   }
@@ -273,6 +286,8 @@ customElements.define("gamified-gtd-stats", GamifiedGTDStatsCard);
 /* ------------------------------------------------------------------ */
 
 class GamifiedGTDQuestsCard extends LitElement {
+  // Quest log card: active quests with x/y progress bars + complete/new buttons
+  // (reads sensor.gtd_quest_log, calls create_project/complete_project).
   static get properties() {
     return { hass: {}, config: {}, _dlg: {} };
   }
@@ -345,6 +360,9 @@ customElements.define("gamified-gtd-quests", GamifiedGTDQuestsCard);
 /* ------------------------------------------------------------------ */
 
 class GamifiedGTDTasksCard extends LitElement {
+  // Tasks card: shows one GTD list (or all) from the todo.gtd_* entities with
+  // metadata attributes; add/edit/complete/remove via services; the inbox rows get
+  // the Clarify dialog (config: list, assigned, show_completed, title).
   static get properties() {
     return { hass: {}, config: {}, _dlg: {}, _task: {} };
   }
@@ -357,6 +375,8 @@ class GamifiedGTDTasksCard extends LitElement {
   getCardSize() {
     return 5;
   }
+  // Collect todo items of the configured list(s) and apply the assigned filter
+  // ("me" = logged-in user's person entity, or an explicit person id).
   _items() {
     const listKeys = this.config.list === "all" ? Object.keys(LISTS) : [this.config.list];
     let items = [];
@@ -493,6 +513,8 @@ customElements.define("gamified-gtd-tasks", GamifiedGTDTasksCard);
 /* ------------------------------------------------------------------ */
 
 class GamifiedGTDReviewCard extends LitElement {
+  // Weekly review card: due state, auto-checked checklist (from the level sensor
+  // attributes), streak, start/complete buttons (config: person, title).
   static get properties() {
     return { hass: {}, config: {} };
   }
@@ -539,6 +561,8 @@ customElements.define("gamified-gtd-review", GamifiedGTDReviewCard);
 /* ------------------------------------------------------------------ */
 
 class GamifiedGTDRewardsCard extends LitElement {
+  // Caps reward shop card: balance from sensor.<name>_caps, rewards from
+  // sensor.gtd_rewards; redeem via redeem_reward (config: person, title).
   static get properties() {
     return { hass: {}, config: {} };
   }
@@ -578,6 +602,7 @@ customElements.define("gamified-gtd-rewards", GamifiedGTDRewardsCard);
 
 /* ------------------------------------------------------------------ */
 
+// Register all five card types in HA's "add card" picker.
 window.customCards = window.customCards || [];
 for (const c of [
   { type: "gamified-gtd-stats", name: "Gamified GTD — Stats (Pip-Boy)", description: "Level, XP, HP, karma, caps, SPECIAL, skills, perks. Config: person." },

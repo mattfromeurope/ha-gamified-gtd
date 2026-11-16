@@ -1,4 +1,13 @@
-"""Config flow for Gamified GTD."""
+"""Config flow for Gamified GTD.
+
+Initial flow (`async_step_user`): pick persons + global options (level cap, defaults,
+contexts); one entry per person selection (unique id = sorted person list).
+
+Options flow steps: init (globals) -> notify (notify service per person, daily summary,
+HA notification, unassigned-to-all) -> person (pick one) -> special (7 SPECIAL values)
+-> tags (3 Tag! skills). Per-person setup is stored under "_profiles" and applied by
+the manager on load.
+"""
 
 from __future__ import annotations
 
@@ -37,6 +46,7 @@ from .const import (
 
 
 def _person_options(hass) -> list[selector.SelectOptionDict]:
+    """All person.* entities as select options (sorted)."""
     return [
         selector.SelectOptionDict(value=state.entity_id, label=state.entity_id)
         for state in sorted(hass.states.async_all("person"), key=lambda s: s.entity_id)
@@ -44,6 +54,8 @@ def _person_options(hass) -> list[selector.SelectOptionDict]:
 
 
 def _base_schema(hass, defaults: dict[str, Any] | None = None) -> vol.Schema:
+    """Schema for the global options (persons, level cap, default time/energy, XP base,
+    default contexts) — used by the initial flow and the options 'init' step."""
     defaults = defaults or {}
     return vol.Schema(
         {
@@ -86,13 +98,14 @@ def _base_schema(hass, defaults: dict[str, Any] | None = None) -> vol.Schema:
 
 
 class GamifiedGTDConfigFlow(ConfigFlow, domain=DOMAIN):
-    """Handle the initial config flow."""
+    """Handle the initial config flow (persons + global options)."""
 
     VERSION = 1
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        """Single step: select persons and set globals; creates the entry."""
         if user_input is not None:
             persons = user_input[CONF_PERSONS]
             await self.async_set_unique_id("_".join(sorted(persons)))
@@ -111,11 +124,13 @@ class GamifiedGTDConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class GamifiedGDTOptionsFlow(OptionsFlow):
-    """Options: global settings plus per-person SPECIAL / Tag! setup."""
+    """Options flow: global settings (init), notifications (notify), then per-person
+    SPECIAL allocation (special) and Tag! skills (tags) — FNV character creation."""
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        """Step 1: global options (persons, level cap, defaults, contexts)."""
         if user_input is not None:
             self._options = {**self._options, **user_input}
             return await self.async_step_notify()
@@ -127,6 +142,8 @@ class GamifiedGDTOptionsFlow(OptionsFlow):
     async def async_step_notify(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        """Step 2: notifications — one notify-service field per person plus daily
+        summary toggle/time, HA notification center, unassigned-to-all."""
         if user_input is not None:
             notify_map = {
                 p: user_input.pop(p, "")
@@ -166,6 +183,7 @@ class GamifiedGDTOptionsFlow(OptionsFlow):
     async def async_step_person(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        """Step 3: pick the person whose SPECIAL/Tag! setup to edit."""
         persons = self._options.get(CONF_PERSONS, [])
         if user_input is not None:
             self._person = user_input["person"]
@@ -188,6 +206,8 @@ class GamifiedGDTOptionsFlow(OptionsFlow):
     async def async_step_special(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        """Step 4: allocate the 7 SPECIAL attributes (1-10 each), like FNV character
+        creation."""
         if user_input is not None:
             self._special = user_input
             return await self.async_step_tags()
@@ -204,6 +224,7 @@ class GamifiedGDTOptionsFlow(OptionsFlow):
     async def async_step_tags(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        """Step 5: choose the 3 Tag! skills (+15 each); finishes the options flow."""
         if user_input is not None:
             profiles = dict(self._options.get("_profiles", {}))
             profiles[self._person] = {

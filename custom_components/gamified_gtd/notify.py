@@ -38,6 +38,8 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def _parse_due(task: dict[str, Any]) -> datetime | None:
+    """Combine the task's due date with its due time (default 09:00 when only a date
+    is set) and return a timezone-aware local datetime; None when no due date."""
     due = task.get("due")
     if not due:
         return None
@@ -53,8 +55,10 @@ class NotificationScheduler:
     def __init__(self, hass: HomeAssistant, manager) -> None:
         self.hass = hass
         self.manager = manager
-        self._unsub: list[Callable] = []
-        self._timers: list[Callable] = []
+        self._unsub: list[Callable] = []  # event subscriptions (data updates, person state changes)
+        self._timers: list[Callable] = []  # cancel callbacks of armed point-in-time timers
+        # Held location-based reminders: [{task_id, person, offset, loc}] waiting for
+        # the person to enter/leave the zone. In-memory only (rebuilt on restart).
         self._held: list[dict[str, Any]] = []
 
     # ------------------------------------------------------------------
@@ -62,6 +66,11 @@ class NotificationScheduler:
     # ------------------------------------------------------------------
 
     async def async_start(self) -> None:
+        """Subscribe to data updates + person state changes and schedule everything.
+
+        `initial=True` on the first run gives catch-up behavior after downtime:
+        only the latest missed reminder per task is delivered, not all of them.
+        """
         self._unsub.append(
             self.hass.bus.async_listen(EVENT_DATA_UPDATED, self._on_data_updated)
         )
@@ -74,6 +83,7 @@ class NotificationScheduler:
         self._reschedule(initial=True)
 
     async def async_stop(self) -> None:
+        """Cancel all timers and subscriptions (on unload)."""
         for cancel in self._timers:
             cancel()
         for unsub in self._unsub:
@@ -83,9 +93,11 @@ class NotificationScheduler:
         self._held.clear()
 
     def _on_data_updated(self, event) -> None:
+        """Any task change -> rebuild the whole schedule (simple and always correct)."""
         self._reschedule(initial=False)
 
     def _on_person_state_changed(self, event) -> None:
+        """A person changed zone -> re-check held location reminders."""
         self._deliver_held()
 
     # ------------------------------------------------------------------
@@ -93,6 +105,7 @@ class NotificationScheduler:
     # ------------------------------------------------------------------
 
     def _reschedule(self, initial: bool) -> None:
+        """Rebuild all timers from the current open tasks + the daily summary timer."""
         for cancel in self._timers:
             cancel()
         self._timers.clear()
@@ -120,6 +133,8 @@ class NotificationScheduler:
         self._schedule_summary()
 
     def _arm(self, when: datetime, action: Callable) -> None:
+        """Arm a one-shot action: fire immediately if the time already passed
+        (catch-up), otherwise via async_track_point_in_time."""
         now = dt_util.now()
         if when <= now:
             action()
@@ -133,6 +148,8 @@ class NotificationScheduler:
     # ------------------------------------------------------------------
 
     def _recipients(self, task: dict[str, Any]) -> list[str]:
+        """Who gets a reminder: the assigned person, or — for unassigned tasks when
+        'unassigned_to_all' is enabled — every person with a notify service."""
         assigned = task.get("assigned_to")
         if assigned:
             return [assigned]
@@ -145,13 +162,18 @@ class NotificationScheduler:
         return []
 
     def _notify_map(self) -> dict[str, str]:
+        """person entity id -> notify service (from the options flow)."""
         return dict(self.manager.options.get(CONF_NOTIFY_SERVICES) or {})
 
     def _person_zone(self, person: str) -> str | None:
+        """Current zone of a person (the person entity's state is the zone name)."""
         state = self.hass.states.get(person)
         return state.state if state else None
 
     def _location_ok(self, loc: dict[str, Any], person: str) -> bool:
+        """Location condition check: mode 'inside' -> person must be in the zone,
+        'outside' -> must not be. Persons without location tracking (no state)
+        count as matching so a reminder is never swallowed (Better ToDo behavior)."""
         zone = self._person_zone(person)
         if zone is None:
             return True  # no location tracking -> never swallow the reminder
@@ -160,6 +182,8 @@ class NotificationScheduler:
         return zone != loc.get("zone")
 
     def _fire_reminder(self, task_id: str, when: datetime, initial: bool) -> None:
+        """A reminder time arrived: resolve recipients; if a location condition is set
+        and not met, hold the reminder for that person, else send immediately."""
         task = self.manager.data["tasks"].get(task_id)
         if not task or task["status"] != TASK_OPEN:
             return
@@ -174,6 +198,8 @@ class NotificationScheduler:
             self._send_reminder(task, person, offset)
 
     def _fire_overdue(self, task_id: str) -> None:
+        """Repeat-while-overdue tick: send if still overdue, then re-arm for the next
+        interval (counted from now, so downtime never stacks missed nudges)."""
         task = self.manager.data["tasks"].get(task_id)
         if not task or task["status"] != TASK_OPEN:
             return
@@ -191,6 +217,8 @@ class NotificationScheduler:
             self._arm(due + timedelta(minutes=repeat) + (dt_util.now() - due), lambda: self._fire_overdue(task_id))
 
     def _deliver_held(self) -> None:
+        """Re-check held reminders after a zone change. Held reminders are dropped when
+        the task was completed or its location condition changed in the meantime."""
         still_held = []
         for held in self._held:
             task = self.manager.data["tasks"].get(held["task_id"])
@@ -203,6 +231,8 @@ class NotificationScheduler:
         self._held = still_held
 
     def _send_reminder(self, task: dict[str, Any], person: str, offset: int) -> None:
+        """Deliver one reminder: push via the person's notify service (if configured)
+        and always fire reminder_sent (offset -1 = overdue repeat)."""
         service = self._notify_map().get(person)
         due = _parse_due(task)
         if offset >= 0:
@@ -234,6 +264,7 @@ class NotificationScheduler:
     # ------------------------------------------------------------------
 
     def _schedule_summary(self) -> None:
+        """Arm the next daily summary at the configured time (today or tomorrow)."""
         if not self.manager.options.get(CONF_SUMMARY_ENABLED):
             return
         time_str = self.manager.options.get(CONF_SUMMARY_TIME, DEFAULT_SUMMARY_TIME)
@@ -249,12 +280,16 @@ class NotificationScheduler:
         )
 
     def _fire_summary(self) -> None:
+        """Daily summary tick: send, then always re-arm for the next day."""
         try:
             self._send_daily_summary()
         finally:
             self._schedule_summary()
 
     def _send_daily_summary(self) -> None:
+        """Per person: one push listing their open tasks — overdue/today always, plus
+        tasks due within the 7-day horizon. No message when the list is empty.
+        Optionally also posts to the HA notification center (dismissed when empty)."""
         today = dt_util.now().date()
         horizon = today + timedelta(days=SUMMARY_HORIZON_DAYS)
         tasks = [t for t in self.manager.data["tasks"].values() if t["status"] == TASK_OPEN]
