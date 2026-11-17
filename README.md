@@ -34,7 +34,7 @@ screen is the Level-Up card:
 | `custom:gamified-gtd-quests` | `title` — quest log with progress, new/complete quest |
 | `custom:gamified-gtd-tasks` | `list` (`inbox`/`next_actions`/`waiting_for`/`someday_maybe`/`all`), `assigned` (`all`/`me`/person), `show_completed` — full task form (title, notes, list, project, assigned, due date+time, priority, time estimate, energy, context, tags, reminders, overdue repeat, location condition), per-row **move-to-list** select, Clarify dialog for the inbox |
 | `custom:gamified-gtd-review` | `person` — auto-checked weekly review checklist |
-| `custom:gamified-gtd-rewards` | `person` — caps reward shop |
+| `custom:gamified-gtd-rewards` | `person` — caps reward shop with add/edit/delete of rewards |
 
 ### Character creation: SPECIAL + G.O.A.T.
 
@@ -105,7 +105,7 @@ The original FNV icons are copyrighted and **not shipped**. Drop your own files 
 `gamified_gtd.add_to_inbox`, `clarify`, `complete_task`, `update_task`, `move_task`,
 `skip_task`, `remove_task`, `create_project`, `add_to_project`, `complete_project`,
 `allocate_skill_points`, `choose_perk`, `start_review`, `complete_review`, `redeem_reward`,
-`submit_goat`, `reset_profile`, `get_state` — see `custom_components/gamified_gtd/services.yaml`.
+`add_reward`, `update_reward`, `remove_reward`, `submit_goat`, `reset_profile`, `get_state` — see `custom_components/gamified_gtd/services.yaml`.
 `update_task` also accepts `list` (move) and `project_id` (assign to quest).
 
 ### Character creation & reset

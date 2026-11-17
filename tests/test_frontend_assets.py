@@ -60,6 +60,12 @@ def test_cards_read_todo_items_attribute():
     # and the move-between-lists + project assignment UI must exist
     assert '"move_task"' in src
     assert "td-project" in src
+    # rewards card: redeem + manage (add/edit/delete) via services
+    assert '"redeem_reward"' in src
+    assert '"add_reward"' in src
+    assert '"update_reward"' in src
+    assert '"remove_reward"' in src
+    assert "+ Add reward" in src
 
 
 def test_cards_are_theme_aware_not_pipboy_green():

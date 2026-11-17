@@ -12,6 +12,9 @@ DOMAIN = "gamified_gtd"
 # Storage: one versioned JSON file in .storage (single source of truth, HA-backed-up).
 STORAGE_KEY = DOMAIN
 STORAGE_VERSION = 1
+# Debounce for the debounced store write (seconds) — see GTDManager._save. The UI
+# refresh event is NOT delayed by this; only the disk write is.
+STORAGE_WRITE_DELAY = 1.0
 
 # ---------------------------------------------------------------------------
 # GTD lists
@@ -96,6 +99,9 @@ SERVICE_CHOOSE_PERK = "choose_perk"
 SERVICE_START_REVIEW = "start_review"
 SERVICE_COMPLETE_REVIEW = "complete_review"
 SERVICE_REDEEM_REWARD = "redeem_reward"
+SERVICE_ADD_REWARD = "add_reward"
+SERVICE_UPDATE_REWARD = "update_reward"
+SERVICE_REMOVE_REWARD = "remove_reward"
 SERVICE_GET_STATE = "get_state"
 SERVICE_MOVE_TASK = "move_task"
 SERVICE_SUBMIT_GOAT = "submit_goat"

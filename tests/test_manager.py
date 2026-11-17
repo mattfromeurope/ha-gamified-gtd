@@ -208,6 +208,35 @@ def test_reset_profile_also_clears_profiles_entry_in_options():
     assert mgr._options["_profiles"] == {}  # in-memory view in sync
 
 
+def test_reward_crud_add_update_remove():
+    """add_reward/update_reward/remove_reward manage the shop in data['rewards']
+    (the list sensor.gtd_rewards + the card read); ids are generated, unknown ids
+    raise, invalid input is rejected."""
+    mgr = _manager()
+    n0 = len(mgr.data["rewards"])
+    # add
+    res = asyncio.run(mgr.add_reward(_call("add_reward", {"name": "Movie night", "description": "Watch a movie", "cost": 200})))
+    rid = res["reward"]["id"]
+    assert len(mgr.data["rewards"]) == n0 + 1
+    assert res["reward"]["name"] == "Movie night" and res["reward"]["cost"] == 200
+    # update only given fields
+    res = asyncio.run(mgr.update_reward(_call("update_reward", {"reward": rid, "cost": 250})))
+    assert res["reward"]["cost"] == 250 and res["reward"]["name"] == "Movie night"
+    # validation
+    with pytest.raises(ValueError, match="empty"):
+        asyncio.run(mgr.add_reward(_call("add_reward", {"name": "  "})))
+    with pytest.raises(ValueError, match=">= 0"):
+        asyncio.run(mgr.add_reward(_call("add_reward", {"name": "x", "cost": -5})))
+    with pytest.raises(ValueError, match="Unknown reward"):
+        asyncio.run(mgr.update_reward(_call("update_reward", {"reward": "nope", "cost": 1})))
+    # remove
+    res = asyncio.run(mgr.remove_reward(_call("remove_reward", {"reward": rid})))
+    assert res["removed"] == rid
+    assert len(mgr.data["rewards"]) == n0
+    with pytest.raises(ValueError, match="Unknown reward"):
+        asyncio.run(mgr.remove_reward(_call("remove_reward", {"reward": rid})))
+
+
 def test_character_creation_pending_flag():
     mgr = _manager()
     profile = _profile(mgr)
@@ -231,3 +260,19 @@ def test_submit_goat_sets_tag_skills():
     call2 = _call("submit_goat", {"person": "person.x", "answers": "0,0,0,0,0,0,0,0,0,0"})
     result2 = asyncio.run(mgr.submit_goat(call2))
     assert result2["tags"] == result["tags"]
+
+
+def test_save_fires_refresh_event_immediately_and_debounces_disk_write():
+    """Regression (UI lag): _save used to `await Store.async_save` (full store JSON to
+    disk) BEFORE firing data_updated, so changes only became visible after the disk
+    write. Now the event fires first and the write is debounced (async_delay_save)."""
+    from custom_components.gamified_gtd.const import EVENT_DATA_UPDATED
+
+    mgr = _manager()
+    mgr._store = MagicMock()
+    # _manager() replaces _save with an AsyncMock — call the real method here
+    asyncio.run(GTDManager._save(mgr))
+    # refresh event fired, disk write debounced not awaited
+    mgr.hass.bus.async_fire.assert_called_once_with(EVENT_DATA_UPDATED, {"entry_id": "e1"})
+    mgr._store.async_delay_save.assert_called_once()
+    mgr._store.async_save.assert_not_called()

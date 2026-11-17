@@ -157,3 +157,28 @@ def test_static_path_serves_cards_and_lit_bundle():
             await runner.cleanup()
 
     asyncio.run(main())
+
+
+def test_reward_services_registered_with_optional_response():
+    """Regression: add/update/remove_reward were registered with SupportsResponse.ONLY,
+    so the rewards card (hass.callService without return_response) failed with
+    'requires return_response=True'. They must be OPTIONAL — plain calls from cards
+    and automations then work, response-requesting calls still get the response."""
+    from homeassistant.core import SupportsResponse
+
+    from custom_components.gamified_gtd.const import (
+        SERVICE_ADD_REWARD,
+        SERVICE_REMOVE_REWARD,
+        SERVICE_UPDATE_REWARD,
+    )
+    from custom_components.gamified_gtd.services import async_setup_services
+
+    hass = MagicMock()
+    hass.services.has_service.return_value = False
+    asyncio.run(async_setup_services(hass))
+    registered = {
+        call.args[1]: call.kwargs.get("supports_response")
+        for call in hass.services.async_register.call_args_list
+    }
+    for svc in (SERVICE_ADD_REWARD, SERVICE_UPDATE_REWARD, SERVICE_REMOVE_REWARD):
+        assert registered.get(svc) == SupportsResponse.OPTIONAL, svc

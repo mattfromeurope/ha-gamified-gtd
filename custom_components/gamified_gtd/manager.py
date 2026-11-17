@@ -62,6 +62,7 @@ from .const import (
     REVIEW_OVERDUE_KARMA_PER_WEEK,
     STORAGE_KEY,
     STORAGE_VERSION,
+    STORAGE_WRITE_DELAY,
     TASK_DONE,
     TASK_OPEN,
     TODO_LISTS,
@@ -211,9 +212,18 @@ class GTDManager:
         }
 
     async def _save(self) -> None:
-        """Persist the data and notify all listeners (entities, scheduler) via event."""
-        await self._store.async_save(self.data)
+        """Notify all listeners (entities, scheduler) via event and persist the data.
+
+        The refresh event fires IMMEDIATELY: entities/sensors/cards read the in-memory
+        self.data, so the UI updates within milliseconds of the change. The disk write
+        is debounced via Store.async_delay_save and deliberately NOT awaited — awaiting
+        Store.async_save here made every change visible only after the full store JSON
+        had been written to disk (noticeable on slow disks / large stores). Store
+        flushes pending delayed writes on HA shutdown (final-write listener), so nothing
+        is lost on a clean stop.
+        """
         self.hass.bus.async_fire(EVENT_DATA_UPDATED, {"entry_id": self.entry_id})
+        self._store.async_delay_save(lambda: self.data, delay=STORAGE_WRITE_DELAY)
 
     # ------------------------------------------------------------------
     # Profiles
@@ -1001,6 +1011,59 @@ class GTDManager:
             },
         )
         return {"reward": reward["id"], "caps_left": profile["caps"]}
+
+    def _reward_by_id(self, reward_id: str) -> dict[str, Any]:
+        """Look up a shop reward by id in the persistent store; raises when unknown."""
+        reward = next((r for r in self.data["rewards"] if r["id"] == reward_id), None)
+        if reward is None:
+            raise ValueError(f"Unknown reward: {reward_id}")
+        return reward
+
+    async def add_reward(self, call: ServiceCall) -> dict[str, Any]:
+        """Service `add_reward`: add a custom shop reward (name, description, cost).
+        The id is generated; the reward is stored in data['rewards'] (the shop that
+        sensor.gtd_rewards and the rewards card read) and saved."""
+        name = str(call.data["name"]).strip()
+        if not name:
+            raise ValueError("name must not be empty")
+        cost = int(call.data.get("cost", 0))
+        if cost < 0:
+            raise ValueError("cost must be >= 0")
+        reward = {
+            "id": _new_id(),
+            "name": name,
+            "description": str(call.data.get("description") or ""),
+            "cost": cost,
+        }
+        self.data["rewards"].append(reward)
+        await self._save()  # fires data_updated -> sensor.gtd_rewards / card refresh
+        return {"reward": reward}
+
+    async def update_reward(self, call: ServiceCall) -> dict[str, Any]:
+        """Service `update_reward`: change name/description/cost of an existing reward
+        (looked up by id). Only the provided fields are changed."""
+        reward = self._reward_by_id(call.data["reward"])
+        if "name" in call.data:
+            name = str(call.data["name"]).strip()
+            if not name:
+                raise ValueError("name must not be empty")
+            reward["name"] = name
+        if "description" in call.data:
+            reward["description"] = str(call.data["description"] or "")
+        if "cost" in call.data:
+            cost = int(call.data["cost"])
+            if cost < 0:
+                raise ValueError("cost must be >= 0")
+            reward["cost"] = cost
+        await self._save()
+        return {"reward": reward}
+
+    async def remove_reward(self, call: ServiceCall) -> dict[str, Any]:
+        """Service `remove_reward`: delete a shop reward by id."""
+        reward = self._reward_by_id(call.data["reward"])
+        self.data["rewards"].remove(reward)
+        await self._save()
+        return {"removed": reward["id"]}
 
     # ------------------------------------------------------------------
     # State

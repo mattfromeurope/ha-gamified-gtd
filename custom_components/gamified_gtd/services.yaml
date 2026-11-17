@@ -393,6 +393,72 @@ redeem_reward:
       selector:
         text:
 
+add_reward:
+  name: Add reward
+  description: Add a custom reward to the caps shop (sensor.gtd_rewards + rewards card update automatically). The id is generated and returned in the response.
+  response:
+    reward:
+      description: the created reward (id, name, description, cost)
+  fields:
+    name:
+      name: Name
+      required: true
+      selector:
+        text:
+    description:
+      name: Description
+      selector:
+        text:
+    cost:
+      name: Cost (caps)
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 100000
+          mode: box
+
+update_reward:
+  name: Update reward
+  description: Change name, description or cost of an existing shop reward (by id). Only the given fields are changed.
+  response:
+    reward:
+      description: the updated reward (id, name, description, cost)
+  fields:
+    reward:
+      name: Reward id
+      required: true
+      selector:
+        text:
+    name:
+      name: Name
+      selector:
+        text:
+    description:
+      name: Description
+      selector:
+        text:
+    cost:
+      name: Cost (caps)
+      selector:
+        number:
+          min: 0
+          max: 100000
+          mode: box
+
+remove_reward:
+  name: Remove reward
+  description: Delete a shop reward by id.
+  response:
+    removed:
+      description: the removed reward id
+  fields:
+    reward:
+      name: Reward id
+      required: true
+      selector:
+        text:
+
 get_state:
   name: Get state
   description: Return the full FNV profile (level, xp, karma, caps, SPECIAL, skills, perks, quests) as response.
