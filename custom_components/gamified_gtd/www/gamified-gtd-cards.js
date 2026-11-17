@@ -53,15 +53,22 @@ const SPECIAL = [
   { id: "luck", fb: "L", desc: "Plain dumb luck. Luck adds ceil(Luck/2) to every skill and improves your critical chance and gambling odds." },
 ];
 
-// The 13 FNV skills with short text-glyph fallbacks.
+// The 13 FNV skills: text-glyph fallback + Pip-Boy-style description (detail pane of
+// the skills card). Governing attribute matches gamification.SKILL_GOVERNING_SPECIAL.
 const SKILLS = [
-  { id: "barter", fb: "Ba" }, { id: "energy_weapons", fb: "EW" },
-  { id: "explosives", fb: "Ex" }, { id: "guns", fb: "Gu" },
-  { id: "lockpick", fb: "Lo" }, { id: "medicine", fb: "Me" },
-  { id: "melee_weapons", fb: "MW" }, { id: "repair", fb: "Re" },
-  { id: "science", fb: "Sc" }, { id: "sneak", fb: "Sn" },
-  { id: "speech", fb: "Sp" }, { id: "survival", fb: "Su" },
-  { id: "unarmed", fb: "Un" },
+  { id: "barter", fb: "Ba", desc: "The art of the deal. Barter lets you buy low and sell high — and talk your way out of trouble." },
+  { id: "energy_weapons", fb: "EW", desc: "Plasma, lasers and everything that hums. Energy Weapons covers all energy-based guns. (Perception)" },
+  { id: "explosives", fb: "Ex", desc: "Grenades, mines and demolitions. Explosives governs thrown and placed explosives. (Perception)" },
+  { id: "guns", fb: "Gu", desc: "Conventional firearms — pistols, rifles, shotguns. Guns covers all ballistic weapons. (Agility)" },
+  { id: "lockpick", fb: "Lo", desc: "Opening doors without keys. Lockpick covers picks and hacking terminals. (Perception)" },
+  { id: "medicine", fb: "Me", desc: "Patching yourself up. Medicine governs stimpaks, chems and revival. (Intelligence)" },
+  { id: "melee_weapons", fb: "MW", desc: "Blades, bats and clubs up close. Melee Weapons covers all melee weapons. (Strength)" },
+  { id: "repair", fb: "Re", desc: "Keeping gear in working order. Repair governs jury-rigging and weapon modifications. (Intelligence)" },
+  { id: "science", fb: "Sc", desc: "Hacking, robotics, terminals. Science covers computers and tech. (Intelligence)" },
+  { id: "sneak", fb: "Sn", desc: "Moving unseen and unheard. Sneak governs stealth and pickpocketing. (Agility)" },
+  { id: "speech", fb: "Sp", desc: "Talking people around to your point of view. Speech governs persuasion and lies. (Charisma)" },
+  { id: "survival", fb: "Su", desc: "Living off the land. Survival governs food, water and poison resistance. (Endurance)" },
+  { id: "unarmed", fb: "Un", desc: "Fighting with your bare hands. Unarmed covers brass knuckles and fist weapons. (Endurance)" },
 ];
 
 // GTD list key -> todo entity + display label.
@@ -120,21 +127,25 @@ function entitiesOf(hass, domain) {
   return Object.keys(hass.states).filter((e) => e.startsWith(domain + ".")).sort();
 }
 
-// Icon helper: user drop-in <kind>/<id>.png first (original FNV icons if the user
-// supplies them); on error the shipped placeholder <kind>/<id>.svg (our own
-// Vault-Boy-style drawings); if that also fails the <img> removes itself and the
-// text fallback stays. On successful load the text fallback is removed.
+// Icon helper lookup order: user drop-in <kind>/<id>.png (original FNV icons if the
+// user supplies them) -> shipped placeholder <kind>/<id>.svg (our own Vault-Boy-style
+// drawings) -> generic shipped <kind>/placeholder.svg -> text glyph fallback.
+// On successful load the text fallback is removed.
 function icon(kind, id, fallback, big) {
   const png = `${ICONS}/${kind}/${id}.png`;
   const svg = `${ICONS}/${kind}/${id}.svg`;
+  const generic = `${ICONS}/${kind}/placeholder.svg`;
   return html`<span class="gicon ${big ? "big" : ""}"
     ><span class="gicon-fb">${fallback}</span
     ><img
       src="${png}"
       alt=""
       @error=${(e) => {
-        if (e.target.src.endsWith(".png")) {
-          e.target.src = svg; // try the shipped svg placeholder
+        const src = e.target.src;
+        if (src.endsWith(".png")) {
+          e.target.src = svg; // try the per-id svg placeholder
+        } else if (src.endsWith(`/${id}.svg`)) {
+          e.target.src = generic; // try the generic placeholder
         } else {
           e.target.remove(); // no image at all -> text fallback stays
         }
@@ -389,8 +400,11 @@ defineCard("gamified-gtd-special", GamifiedGTDSPECIALCard);
 /* ------------------------------------------------------------------ */
 
 class GamifiedGDTDSkillsCard extends LitElement {
+  // Skills card in the Pip-Boy layout: LEFT = list of the 13 skills with values
+  // (TAG! badge on tagged skills; hover/tap selects), RIGHT = big icon of the
+  // selected skill + scrollable description below.
   static get properties() {
-    return { hass: {}, config: {} };
+    return { hass: {}, config: {}, _sel: {} };
   }
   static getStubConfig() {
     return { person: "person.example", title: "SKILLS" };
@@ -398,6 +412,7 @@ class GamifiedGDTDSkillsCard extends LitElement {
   setConfig(config) {
     if (!config.person) throw new Error("person is required");
     this.config = config;
+    this._sel = "barter";
   }
   getCardSize() {
     return 6;
@@ -405,20 +420,29 @@ class GamifiedGDTDSkillsCard extends LitElement {
   render() {
     const skills = this.hass.states[sensorId(this.config.person, "skills")];
     const tagged = new Set((skills && skills.attributes.tagged_skills) || []);
+    const sel = SKILLS.find((s) => s.id === this._sel) || SKILLS[0];
+    const selVal = skills ? skills.attributes[sel.id] : "?";
     return html`
       <ha-card>
         <div class="head"><span class="title">${this.config.title || "SKILLS"}</span>
           <span class="sub">${this.config.person}</span></div>
-        ${SKILLS.map((s) => {
-          const v = skills ? skills.attributes[s.id] : 0;
-          return html`
-            <div class="srow">
-              ${icon("skill", s.id, s.fb)}
-              <span class="nm">${s.id.replace(/_/g, " ")}${tagged.has(s.id) ? html`<span class="tagbadge">TAG!</span>` : ""}</span>
-              <div class="bar"><div style="width:${Math.min(100, v)}%"></div></div>
-              <span class="val">${skills ? v : "?"}</span>
-            </div>`;
-        })}
+        <div class="split">
+          <div class="alist">
+            ${SKILLS.map((s) => html`
+              <div class="arow ${s.id === sel.id ? "sel" : ""}"
+                @mouseenter=${() => { this._sel = s.id; }}
+                @click=${() => { this._sel = s.id; }}>
+                ${icon("skill", s.id, s.fb)}
+                <span class="nm">${s.id.replace(/_/g, " ")}${tagged.has(s.id) ? html`<span class="tagbadge">TAG!</span>` : ""}</span>
+                <span class="val">${skills ? skills.attributes[s.id] : "?"}</span>
+              </div>`)}
+          </div>
+          <div class="detail">
+            <div class="detail-icon">${icon("skill", sel.id, sel.fb, true)}</div>
+            <div class="detail-name">${sel.id.replace(/_/g, " ")} — ${selVal}</div>
+            <div class="detail-desc">${sel.desc}</div>
+          </div>
+        </div>
       </ha-card>`;
   }
   static get styles() {
@@ -432,8 +456,11 @@ defineCard("gamified-gtd-skills", GamifiedGDTDSkillsCard);
 /* ------------------------------------------------------------------ */
 
 class GamifiedGTDPerksCard extends LitElement {
+  // Perks card in the Pip-Boy layout: LEFT = list of the OWNED perks (hover/tap
+  // selects), RIGHT = big icon of the selected perk + scrollable description.
+  // Icons: user drop-in perk/<id>.png -> generic shipped perk/placeholder.svg.
   static get properties() {
-    return { hass: {}, config: {} };
+    return { hass: {}, config: {}, _sel: {} };
   }
   static getStubConfig() {
     return { person: "person.example", title: "PERKS" };
@@ -441,23 +468,38 @@ class GamifiedGTDPerksCard extends LitElement {
   setConfig(config) {
     if (!config.person) throw new Error("person is required");
     this.config = config;
+    this._sel = null;
   }
   getCardSize() {
-    return 4;
+    return 5;
   }
   render() {
     const perks = this.hass.states[sensorId(this.config.person, "perks")];
     const details = (perks && perks.attributes.perk_details) || [];
+    if (details.length && !details.find((p) => p.id === this._sel)) this._sel = details[0].id;
+    const sel = details.find((p) => p.id === this._sel);
     return html`
       <ha-card>
         <div class="head"><span class="title">${this.config.title || "PERKS"}</span>
           <span class="sub">${details.length} owned</span></div>
-        ${details.length === 0 ? html`<div class="empty">No perks yet — every 2 levels you may choose one.</div>` : ""}
-        ${details.map((p) => html`
-          <div class="perk">
-            <div class="p-name">${icon("perk", p.id, p.name[0])}${p.name}</div>
-            <div class="p-desc">${p.description}</div>
-          </div>`)}
+        ${details.length === 0 ? html`<div class="empty">No perks yet — every 2 levels you may choose one (see the Level-Up card).</div>` : html`
+        <div class="split">
+          <div class="alist">
+            ${details.map((p) => html`
+              <div class="arow ${sel && p.id === sel.id ? "sel" : ""}"
+                @mouseenter=${() => { this._sel = p.id; }}
+                @click=${() => { this._sel = p.id; }}>
+                ${icon("perk", p.id, p.name[0])}
+                <span class="nm">${p.name}</span>
+              </div>`)}
+          </div>
+          <div class="detail">
+            ${sel ? html`
+              <div class="detail-icon">${icon("perk", sel.id, sel.name[0], true)}</div>
+              <div class="detail-name">${sel.name}</div>
+              <div class="detail-desc">${sel.description}</div>` : ""}
+          </div>
+        </div>`}
       </ha-card>`;
   }
   static get styles() {

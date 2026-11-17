@@ -87,11 +87,41 @@ def test_special_card_uses_pipboy_split_layout():
         assert f'id: "{stat}"' in src and "desc:" in src
 
 
-def test_icon_helper_png_then_svg_then_text():
-    """Icon lookup order: user drop-in .png -> shipped .svg placeholder -> text glyph."""
+def test_icon_helper_png_then_svg_then_placeholder_then_text():
+    """Icon lookup order: user drop-in .png -> shipped <id>.svg -> shipped
+    placeholder.svg -> text glyph."""
     src = CARDS.read_text(encoding="utf-8")
-    assert '.png`' in src and '.svg`' in src
+    assert '.png`' in src and '.svg`' in src and 'placeholder.svg' in src
     assert 'e.target.src = svg' in src
+    assert 'e.target.src = generic' in src
+
+
+def test_skills_and_perks_cards_use_pipboy_split_layout():
+    """Skills and Perks cards use the same split layout as SPECIAL (list left,
+    icon + scrollable description right)."""
+    src = CARDS.read_text(encoding="utf-8")
+    for tag in ("gamified-gtd-skills", "gamified-gtd-perks"):
+        assert f'defineCard("{tag}"' in src
+    # both cards render the shared split structure
+    assert src.count('class="split"') >= 3  # special + skills + perks
+    assert src.count('class="alist"') >= 3
+    assert src.count("detail-desc") >= 3
+    # every skill has a description for the detail pane
+    for skill in ("barter", "guns", "sneak", "unarmed"):
+        assert f'id: "{skill}"' in src
+    assert src.count("desc:") >= 20  # 7 SPECIAL + 13 skills
+
+
+def test_skill_and_perk_placeholder_svgs_shipped():
+    """Vault-Boy-style placeholder SVGs for all 13 skills + generic perk placeholder."""
+    skill_dir = WWW / "gamified_gtd_icons" / "skill"
+    skills = ("barter", "energy_weapons", "explosives", "guns", "lockpick", "medicine",
+              "melee_weapons", "repair", "science", "sneak", "speech", "survival", "unarmed")
+    for skill in skills:
+        f = skill_dir / f"{skill}.svg"
+        assert f.exists(), f"missing skill placeholder {f}"
+        assert "<svg" in f.read_text(encoding="utf-8")
+    assert (WWW / "gamified_gtd_icons" / "perk" / "placeholder.svg").exists()
 
 
 def test_special_placeholder_svgs_shipped():
