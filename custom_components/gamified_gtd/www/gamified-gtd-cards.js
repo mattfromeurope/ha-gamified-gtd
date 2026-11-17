@@ -1070,9 +1070,11 @@ defineCard("gamified-gtd-review", GamifiedGTDReviewCard);
 
 class GamifiedGTDRewardsCard extends LitElement {
   // Caps reward shop card: balance from sensor.<name>_caps, rewards from
-  // sensor.gtd_rewards; redeem via redeem_reward (config: person, title).
+  // sensor.gtd_rewards. Redeem via redeem_reward; manage the shop (add/edit/delete)
+  // via add_reward / update_reward / remove_reward — thin frontend, all logic in
+  // the services (config: person, title).
   static get properties() {
-    return { hass: {}, config: {} };
+    return { hass: {}, config: {}, _edit: {}, _fName: {}, _fDesc: {}, _fCost: {} };
   }
   static getStubConfig() {
     return { person: "person.example", title: "REWARDS" };
@@ -1083,6 +1085,22 @@ class GamifiedGTDRewardsCard extends LitElement {
   }
   getCardSize() {
     return 3;
+  }
+  _startEdit(r) {
+    // r = existing reward to edit, null = "add new"
+    this._edit = r ? r.id : "new";
+    this._fName = r ? r.name : "";
+    this._fDesc = r ? r.description || "" : "";
+    this._fCost = r ? r.cost : 50;
+  }
+  async _saveEdit() {
+    const data = { name: this._fName, description: this._fDesc, cost: Number(this._fCost) };
+    if (this._edit === "new") {
+      await svc(this.hass, "add_reward", data);
+    } else {
+      await svc(this.hass, "update_reward", { reward: this._edit, ...data });
+    }
+    this._edit = null;
   }
   render() {
     const caps = this.hass.states[sensorId(this.config.person, "caps")];
@@ -1099,7 +1117,23 @@ class GamifiedGTDRewardsCard extends LitElement {
             <span class="t-title">${r.name}<br /><span class="badge">${r.description || ""}</span></span>
             <span class="badge">${r.cost} caps</span>
             <button ?disabled=${balance < r.cost} @click=${() => svc(this.hass, "redeem_reward", { person: this.config.person, reward: r.id })}>Redeem</button>
+            <button @click=${() => this._startEdit(r)}>Edit</button>
+            <button @click=${() => svc(this.hass, "remove_reward", { reward: r.id })}>Delete</button>
           </div>`)}
+        ${this._edit ? html`
+          <div class="dlg">
+            <label>Name</label>
+            <input type="text" .value=${this._fName} @input=${(e) => (this._fName = e.target.value)} />
+            <label>Description</label>
+            <input type="text" .value=${this._fDesc} @input=${(e) => (this._fDesc = e.target.value)} />
+            <label>Cost (caps)</label>
+            <input type="number" min="0" .value=${this._fCost} @input=${(e) => (this._fCost = e.target.value)} />
+            <div class="btns">
+              <button ?disabled=${!this._fName} @click=${() => this._saveEdit()}>Save</button>
+              <button @click=${() => (this._edit = null)}>Cancel</button>
+            </div>
+          </div>` : html`
+          <div class="btns"><button @click=${() => this._startEdit(null)}>+ Add reward</button></div>`}
       </ha-card>`;
   }
   static get styles() {

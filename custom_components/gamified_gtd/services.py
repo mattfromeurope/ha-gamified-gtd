@@ -16,6 +16,7 @@ from homeassistant.helpers import config_validation as cv
 from . import gamification as g
 from .const import (
     DOMAIN,
+    SERVICE_ADD_REWARD,
     SERVICE_ADD_TO_INBOX,
     SERVICE_ADD_TO_PROJECT,
     SERVICE_ALLOCATE_SKILL_POINTS,
@@ -28,11 +29,13 @@ from .const import (
     SERVICE_GET_STATE,
     SERVICE_MOVE_TASK,
     SERVICE_REDEEM_REWARD,
+    SERVICE_REMOVE_REWARD,
     SERVICE_REMOVE_TASK,
     SERVICE_RESET_PROFILE,
     SERVICE_SKIP_TASK,
     SERVICE_START_REVIEW,
     SERVICE_SUBMIT_GOAT,
+    SERVICE_UPDATE_REWARD,
     SERVICE_UPDATE_TASK,
     TODO_LISTS,
 )
@@ -152,6 +155,25 @@ REDEEM_REWARD_SCHEMA = vol.Schema(
     }
 )
 
+# Reward shop management: add / update / remove custom rewards (thin frontend for the
+# rewards card; also usable from automations and LLM tools).
+ADD_REWARD_SCHEMA = vol.Schema(
+    {
+        vol.Required("name"): cv.string,
+        vol.Optional("description", default=""): cv.string,
+        vol.Optional("cost", default=0): vol.All(vol.Coerce(int), vol.Range(min=0)),
+    }
+)
+UPDATE_REWARD_SCHEMA = vol.Schema(
+    {
+        vol.Required("reward"): cv.string,  # reward id
+        vol.Optional("name"): cv.string,
+        vol.Optional("description"): cv.string,
+        vol.Optional("cost"): vol.All(vol.Coerce(int), vol.Range(min=0)),
+    }
+)
+REMOVE_REWARD_SCHEMA = vol.Schema({vol.Required("reward"): cv.string})
+
 # move_task: move a task to another GTD list (keeps project assignment + metadata).
 MOVE_TASK_SCHEMA = vol.Schema(
     {
@@ -258,6 +280,39 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
     hass.services.async_register(DOMAIN, SERVICE_REDEEM_REWARD, handle_redeem, schema=REDEEM_REWARD_SCHEMA)
 
+    async def handle_add_reward(call: ServiceCall) -> dict:
+        return await get_manager(hass).add_reward(call)
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_ADD_REWARD,
+        handle_add_reward,
+        schema=ADD_REWARD_SCHEMA,
+        supports_response=SupportsResponse.ONLY,
+    )
+
+    async def handle_update_reward(call: ServiceCall) -> dict:
+        return await get_manager(hass).update_reward(call)
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_UPDATE_REWARD,
+        handle_update_reward,
+        schema=UPDATE_REWARD_SCHEMA,
+        supports_response=SupportsResponse.ONLY,
+    )
+
+    async def handle_remove_reward(call: ServiceCall) -> dict:
+        return await get_manager(hass).remove_reward(call)
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_REMOVE_REWARD,
+        handle_remove_reward,
+        schema=REMOVE_REWARD_SCHEMA,
+        supports_response=SupportsResponse.ONLY,
+    )
+
     async def handle_get_state(call: ServiceCall) -> dict:
         return get_manager(hass).get_state(call)
 
@@ -314,6 +369,9 @@ async def async_unload_services(hass: HomeAssistant) -> None:
         SERVICE_START_REVIEW,
         SERVICE_COMPLETE_REVIEW,
         SERVICE_REDEEM_REWARD,
+        SERVICE_ADD_REWARD,
+        SERVICE_UPDATE_REWARD,
+        SERVICE_REMOVE_REWARD,
         SERVICE_GET_STATE,
         SERVICE_MOVE_TASK,
         SERVICE_SUBMIT_GOAT,
