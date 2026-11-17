@@ -313,7 +313,7 @@ class GamifiedGDTOptionsFlow(OptionsFlow):
             self._goat_answers.append(int(user_input["answer"]))
             self._goat_idx += 1
             if self._goat_idx >= len(QUESTIONS):
-                return await self._goat_finish()
+                return await self._goat_result_step()
         q = QUESTIONS[self._goat_idx]
         # Slide images are user drop-ins (original FNV art is copyrighted):
         # www/gamified_gtd_icons/goat/slide_<n>.png, served under /<DOMAIN>_static/...
@@ -349,22 +349,55 @@ class GamifiedGDTOptionsFlow(OptionsFlow):
             last_step=self._goat_idx == len(QUESTIONS) - 1,
         )
 
-    async def _goat_finish(self) -> ConfigFlowResult:
-        """Score the collected G.O.A.T. answers (one 0-based answer index per question)
-        via goat_data.goat_result and finish the options flow, storing SPECIAL + the
-        G.O.A.T. result + the derived Tag! skills on the chosen person's profile."""
+    async def _goat_result_step(self) -> ConfigFlowResult:
+        """Score the collected G.O.A.T. answers and show the result step (3 Tag! skills
+        + the vault job), asking whether the user wants to adjust the Tag! skills
+        manually instead."""
         result = goat_result(self._goat_answers)
+        self._goat_result = {
+            "answers": self._goat_answers,
+            "counts": result["counts"],
+            "tags": result["tags"],
+            "job": result["job"],
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+        }
+        job = result["job"]
+        result_md = (
+            f"**Your Tag! skills:** {', '.join(result['tags'])}\n\n"
+            f"**Your vault job:** {job['name']}\n\n"
+            f"*{job['comment']}*"
+        )
+        return self.async_show_form(
+            step_id="goat_result",
+            data_schema=vol.Schema(
+                {vol.Required("adjust_tags", default=False): bool}
+            ),
+            description_placeholders={"result": result_md},
+            last_step=True,
+        )
+
+    async def async_step_goat_result(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """G.O.A.T. result step: shows the 3 Tag! skills + vault job and asks whether
+        to adjust the Tag! skills manually. 'No' finishes the flow with the G.O.A.T.
+        result; 'yes' continues to the manual Tag! picker (the G.O.A.T. result is kept
+        on the profile either way)."""
+        if user_input is not None:
+            if user_input.get("adjust_tags"):
+                return await self.async_step_tags()
+            return self._goat_store(self._goat_result["tags"])
+        # re-show (e.g. after a validation error elsewhere) — recompute the form
+        return await self._goat_result_step()
+
+    def _goat_store(self, tagged_skills: list[str]) -> ConfigFlowResult:
+        """Store SPECIAL + the G.O.A.T. result + the (possibly manually adjusted)
+        Tag! skills on the chosen person's profile and finish the options flow."""
         profiles = dict(self._options.get("_profiles", {}))
         profiles[self._person] = {
             "special": self._special,
-            "goat": {
-                "answers": self._goat_answers,
-                "counts": result["counts"],
-                "tags": result["tags"],
-                "job": result["job"],
-                "completed_at": datetime.now(timezone.utc).isoformat(),
-            },
-            "tagged_skills": result["tags"],
+            "goat": self._goat_result,
+            "tagged_skills": tagged_skills,
         }
         self._options["_profiles"] = profiles
         self._options[CONF_DEFAULT_PROFILE] = self._options.get(
@@ -379,11 +412,15 @@ class GamifiedGDTOptionsFlow(OptionsFlow):
         the options flow. Only shown when character creation is already done — while it
         is pending, the G.O.A.T. step follows S.P.E.C.I.A.L. instead."""
         if user_input is not None:
+            # merge into any existing setup for this person — keep a previously stored
+            # G.O.A.T. result when the user only adjusts the Tag! skills afterwards
             profiles = dict(self._options.get("_profiles", {}))
-            profiles[self._person] = {
-                "special": self._special,
-                "tagged_skills": user_input["tagged_skills"],
-            }
+            setup = dict(profiles.get(self._person, {}))
+            setup["special"] = self._special
+            setup["tagged_skills"] = user_input["tagged_skills"]
+            if getattr(self, "_goat_result", None):
+                setup["goat"] = self._goat_result
+            profiles[self._person] = setup
             self._options["_profiles"] = profiles
             self._options[CONF_DEFAULT_PROFILE] = self._options.get(
                 CONF_DEFAULT_PROFILE, self._person

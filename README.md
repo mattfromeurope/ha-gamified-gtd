@@ -44,7 +44,9 @@ screen is the Level-Up card:
 - While character creation is pending, the **G.O.A.T. runs directly after the S.P.E.C.I.A.L.**
   step in the same options flow (one question per form: question text + slide image in the
   description, the 4 answers as radio buttons directly below; slide images appear when
-  present) — no dashboard card needed. The pending notification at HA start
+  present), followed by a result step showing the 3 Tag! skills + the vault job and asking
+  whether to adjust the Tag! skills manually — no dashboard card needed. The pending
+  notification at HA start
   (and after `reset_profile`) links straight there. Alternatively, add the
   `custom:gamified-gtd-goat` card to a dashboard once at setup and answer the 10 questions
   there; the result is applied via `gamified_gtd.submit_goat` and stored on the profile
@@ -117,9 +119,12 @@ The original FNV icons are copyrighted and **not shipped**. Drop your own files 
 - **`gamified_gtd.reset_profile`** (person) resets ONLY the FNV character — level, XP,
   SPECIAL, allocated skills, Tag! skills, skill points, perks, caps, G.O.A.T. state (HP/skill
   values derive automatically). **Tasks, quests, reviews, rewards and karma are not
-  touched.** The user who triggers the reset (service-call context) immediately gets the
-  persistent notification addressed to them (persistent notifications are global in HA, so
-  the message text names the triggering user); the response contains that user name.
+  touched.** The person's `_profiles` entry in the config entry options is dropped as well,
+  so the options flow routes to the G.O.A.T. again (not the manual Tag! picker) and a
+  restart does not re-apply the old SPECIAL/Tag! values. The user who triggers the reset
+  (service-call context) immediately gets the persistent notification addressed to them
+  (persistent notifications are global in HA, so the message text names the triggering
+  user); the response contains that user name.
 - The `custom:gamified-gtd-goat` card remains as an optional, equivalent way to take the
   G.O.A.T. on a dashboard.
 

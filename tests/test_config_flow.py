@@ -69,11 +69,9 @@ def test_goat_step_shows_one_question_with_radio_answers():
     assert sel["mode"] == "list" and len(sel["options"]) == 4
 
 
-def test_goat_step_walks_all_10_questions_then_stores_result():
-    """Each submit stores one answer and shows the next question; after the 10th the
-    flow finishes and SPECIAL + G.O.A.T. result + Tag! skills are stored on the profile."""
-    flow = _flow()
-    flow._special = {s: 5 for s in SPECIAL_STATS}
+def _walk_goat(flow, answers=None):
+    """Walk all 10 GOAT questions; returns the goat_result form."""
+    answers = answers or ["0"] * len(QUESTIONS)
 
     async def run():
         r = await flow.async_step_goat(None)  # first question form
@@ -83,17 +81,52 @@ def test_goat_step_walks_all_10_questions_then_stores_result():
             assert r["last_step"] == (i == len(QUESTIONS) - 1)
             assert f"Question {i + 1} of 10" in r["description_placeholders"]["question"]
             _serialize(r)
-            r = await flow.async_step_goat({"answer": "0"})
+            r = await flow.async_step_goat({"answer": answers[i]})
         return r
 
-    result = asyncio.run(run())
-    assert result["type"] == "create_entry"
-    setup = result["data"]["_profiles"]["person.x"]
+    return asyncio.run(run())
+
+
+def test_goat_walks_10_questions_then_shows_result_step():
+    """After the 10th answer a result step shows the 3 Tag! skills + the vault job and
+    asks whether to adjust the Tag! skills manually; 'no' finishes the flow."""
+    flow = _flow()
+    flow._special = {s: 5 for s in SPECIAL_STATS}
+    result = _walk_goat(flow)
+    assert result["type"] == "form" and result["step_id"] == "goat_result"
+    assert result["last_step"] is True
+    md = result["description_placeholders"]["result"]
+    assert "guns, barter, explosives" in md  # all-first-answers -> these tags
+    assert "Tattoo artist" in md
+    _serialize(result)
+    # answer "no" -> create_entry with SPECIAL + G.O.A.T. result + derived Tag! skills
+    final = asyncio.run(flow.async_step_goat_result({"adjust_tags": False}))
+    assert final["type"] == "create_entry"
+    setup = final["data"]["_profiles"]["person.x"]
     assert setup["special"] == flow._special
     assert setup["tagged_skills"] == setup["goat"]["tags"] == ["guns", "barter", "explosives"]
     assert setup["goat"]["job"]["name"] == "Tattoo artist"
     assert setup["goat"]["answers"] == [0] * 10
     assert "completed_at" in setup["goat"]
+
+
+def test_goat_result_can_route_to_manual_tags_and_keeps_goat_result():
+    """Answering 'yes' on the result step continues to the manual Tag! picker; the
+    G.O.A.T. result stays stored on the profile, the manually chosen Tag! skills win."""
+    flow = _flow()
+    flow._special = {s: 5 for s in SPECIAL_STATS}
+    result = _walk_goat(flow)
+    tags_form = asyncio.run(flow.async_step_goat_result({"adjust_tags": True}))
+    assert tags_form["type"] == "form" and tags_form["step_id"] == "tags"
+    _serialize(tags_form)
+    final = asyncio.run(
+        flow.async_step_tags({"tagged_skills": ["sneak", "lockpick", "science"]})
+    )
+    assert final["type"] == "create_entry"
+    setup = final["data"]["_profiles"]["person.x"]
+    assert setup["tagged_skills"] == ["sneak", "lockpick", "science"]  # manual override
+    assert setup["goat"]["tags"] == ["guns", "barter", "explosives"]  # GOAT result kept
+    assert setup["special"] == flow._special
 
 
 def test_special_step_routes_to_goat_while_character_creation_pending():
@@ -175,6 +208,9 @@ def test_all_step_schemas_serialize_for_frontend():
         for _ in range(len(QUESTIONS) - 1):
             r = await flow.async_step_goat({"answer": "0"})
             _serialize(r)  # goat, next question
+        r = await flow.async_step_goat({"answer": "0"})  # 10th answer -> result step
+        assert r["step_id"] == "goat_result"
+        _serialize(r)
         # invalid SPECIAL (35 != 40) re-shows the form with a base error
         r = await flow.async_step_special({s: "5" for s in SPECIAL_STATS})
         assert r["type"] == "form" and r["step_id"] == "special" and r["errors"]["base"]

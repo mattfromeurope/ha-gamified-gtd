@@ -56,6 +56,13 @@
           "answer": "Answer"
         }
       },
+      "goat_result": {
+        "title": "G.O.A.T. result",
+        "description": "{result}\n\nDo you want to adjust the Tag! skills manually?",
+        "data": {
+          "adjust_tags": "Adjust the Tag! skills manually instead"
+        }
+      },
       "tags": {
         "title": "Tag! skills",
         "description": "Choose 3 Tag! skills (+15 each) manually. While character creation is pending, the G.O.A.T. runs directly after S.P.E.C.I.A.L. instead; the 'Gamified GTD — G.O.A.T.' card (custom:gamified-gtd-goat) remains as an optional alternative.",
