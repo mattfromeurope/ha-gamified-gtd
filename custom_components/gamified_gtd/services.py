@@ -283,12 +283,15 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     async def handle_add_reward(call: ServiceCall) -> dict:
         return await get_manager(hass).add_reward(call)
 
+    # OPTIONAL (not ONLY): the rewards card calls via hass.callService without
+    # return_response — with ONLY that errors ("requires return_response=True").
+    # OPTIONAL accepts both plain calls and response-requesting calls.
     hass.services.async_register(
         DOMAIN,
         SERVICE_ADD_REWARD,
         handle_add_reward,
         schema=ADD_REWARD_SCHEMA,
-        supports_response=SupportsResponse.ONLY,
+        supports_response=SupportsResponse.OPTIONAL,
     )
 
     async def handle_update_reward(call: ServiceCall) -> dict:
@@ -299,7 +302,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         SERVICE_UPDATE_REWARD,
         handle_update_reward,
         schema=UPDATE_REWARD_SCHEMA,
-        supports_response=SupportsResponse.ONLY,
+        supports_response=SupportsResponse.OPTIONAL,
     )
 
     async def handle_remove_reward(call: ServiceCall) -> dict:
@@ -310,7 +313,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         SERVICE_REMOVE_REWARD,
         handle_remove_reward,
         schema=REMOVE_REWARD_SCHEMA,
-        supports_response=SupportsResponse.ONLY,
+        supports_response=SupportsResponse.OPTIONAL,
     )
 
     async def handle_get_state(call: ServiceCall) -> dict:
