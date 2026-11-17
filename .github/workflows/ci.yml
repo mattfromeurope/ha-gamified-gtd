@@ -34,7 +34,7 @@ jobs:
       - name: Install pytest
         run: pip install pytest
       - name: Run tests
-        run: python -m pytest tests/test_gamification.py -q
+        run: python -m pytest tests/test_gamification.py tests/test_frontend_assets.py -q
 
   # Smoke test: import all integration modules with a real Home Assistant install,
   # so import errors (e.g. circular imports) that break the config flow are caught.
@@ -60,7 +60,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: node --check cards module
+      - name: node --check card modules
         run: |
           cp custom_components/gamified_gtd/www/gamified-gtd-cards.js /tmp/cards.mjs
+          cp custom_components/gamified_gtd/www/gamified-gtd-lit.js /tmp/lit-bundle.mjs
           node --check /tmp/cards.mjs
+          node --check /tmp/lit-bundle.mjs

@@ -1,6 +1,30 @@
-import { LitElement, html, css } from "lit";
-
 /* Gamified GTD — Pip-Boy style custom cards.
+ *
+ * lit is loaded via dynamic import() instead of a static `import ... from "lit"`:
+ * only recent HA frontends (>= 2025.12) expose "lit" through an import map in
+ * index.html. On older versions a bare "lit" specifier makes the WHOLE module
+ * fail ("Failed to resolve module specifier \"lit\""), so none of the
+ * customElements.define() calls below ever run and every card shows
+ * "Custom element not found". The fallback is the vendored bundle
+ * gamified-gtd-lit.js next to this file (same static path, see
+ * scripts/build_cards_lit.sh). A dynamic import() only rejects its own promise,
+ * so the catch below is reliable — unlike a static import, which kills the module.
+ */
+let LitElement, html, css;
+try {
+  ({ LitElement, html, css } = await import("lit"));
+} catch (_litImportErr) {
+  ({ LitElement, html, css } = await import("./gamified-gtd-lit.js"));
+}
+
+// Register a card class only once: this file can be loaded twice (extra module
+// URL + additionally added as a Lovelace resource), and a second define() of
+// the same tag would throw and abort the module.
+function defineCard(tag, cls) {
+  if (!customElements.get(tag)) customElements.define(tag, cls);
+}
+
+/* Gamified GTD — Pip-Boy style custom cards (continued).
  *
  * Icons: original Fallout: New Vegas icons are copyrighted and NOT shipped.
  * Drop your own files into custom_components/gamified_gtd/www/gamified_gtd_icons/
@@ -279,7 +303,7 @@ class GamifiedGTDStatsCard extends LitElement {
     return pipCss;
   }
 }
-customElements.define("gamified-gtd-stats", GamifiedGTDStatsCard);
+defineCard("gamified-gtd-stats", GamifiedGTDStatsCard);
 
 /* ------------------------------------------------------------------ */
 /* Quests card                                                         */
@@ -353,7 +377,7 @@ class GamifiedGTDQuestsCard extends LitElement {
     return pipCss;
   }
 }
-customElements.define("gamified-gtd-quests", GamifiedGTDQuestsCard);
+defineCard("gamified-gtd-quests", GamifiedGTDQuestsCard);
 
 /* ------------------------------------------------------------------ */
 /* Tasks card (with Clarify dialog for the inbox)                      */
@@ -506,7 +530,7 @@ class GamifiedGTDTasksCard extends LitElement {
     return pipCss;
   }
 }
-customElements.define("gamified-gtd-tasks", GamifiedGTDTasksCard);
+defineCard("gamified-gtd-tasks", GamifiedGTDTasksCard);
 
 /* ------------------------------------------------------------------ */
 /* Review card                                                         */
@@ -554,7 +578,7 @@ class GamifiedGTDReviewCard extends LitElement {
     return pipCss;
   }
 }
-customElements.define("gamified-gtd-review", GamifiedGTDReviewCard);
+defineCard("gamified-gtd-review", GamifiedGTDReviewCard);
 
 /* ------------------------------------------------------------------ */
 /* Rewards card                                                        */
@@ -598,7 +622,7 @@ class GamifiedGTDRewardsCard extends LitElement {
     return pipCss;
   }
 }
-customElements.define("gamified-gtd-rewards", GamifiedGTDRewardsCard);
+defineCard("gamified-gtd-rewards", GamifiedGTDRewardsCard);
 
 /* ------------------------------------------------------------------ */
 
