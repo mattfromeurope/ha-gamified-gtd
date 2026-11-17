@@ -49,9 +49,25 @@
           "luck": "Luck"
         }
       },
+      "goat": {
+        "title": "G.O.A.T.",
+        "description": "Answer all 10 questions of the Generalized Occupational Aptitude Test (Vault 101) — your 3 Tag! skills are determined automatically.\n\n{questions}",
+        "data": {
+          "q1": "Question 1",
+          "q2": "Question 2",
+          "q3": "Question 3",
+          "q4": "Question 4",
+          "q5": "Question 5",
+          "q6": "Question 6",
+          "q7": "Question 7",
+          "q8": "Question 8",
+          "q9": "Question 9",
+          "q10": "Question 10"
+        }
+      },
       "tags": {
         "title": "Tag! skills",
-        "description": "Choose 3 Tag! skills (+15 each) — or leave this and take the G.O.A.T. instead: add the 'Gamified GTD — G.O.A.T.' card (custom:gamified-gtd-goat) to a dashboard and the test determines your Tag! skills automatically.",
+        "description": "Choose 3 Tag! skills (+15 each) manually. While character creation is pending, the G.O.A.T. runs directly after S.P.E.C.I.A.L. instead; the 'Gamified GTD — G.O.A.T.' card (custom:gamified-gtd-goat) remains as an optional alternative.",
         "data": {
           "tagged_skills": "Tag! skills"
         }

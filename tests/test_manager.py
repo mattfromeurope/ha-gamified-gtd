@@ -19,7 +19,7 @@ pytest.importorskip("homeassistant")
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from homeassistant.core import ServiceCall  # noqa: E402
+from homeassistant.core import Context, ServiceCall  # noqa: E402
 
 from custom_components.gamified_gtd.const import DOMAIN  # noqa: E402
 from custom_components.gamified_gtd.manager import GTDManager  # noqa: E402
@@ -31,6 +31,8 @@ def _manager() -> GTDManager:
     mgr.data = mgr._initial_data()
     mgr.data["profiles"]["person.x"] = mgr._new_profile("person.x")
     mgr._save = AsyncMock()  # don't touch real storage
+    # the character-creation hint posts a persistent notification via the service bus
+    mgr.hass.services.async_call = AsyncMock()
     return mgr
 
 
@@ -127,6 +129,14 @@ def test_reset_profile_resets_character_only():
 
     assert result["reset"] is True
     assert result["character_creation_pending"] is True
+    assert result["user"] is None  # no user context on the call -> generic hint
+    # the pending hint fires IMMEDIATELY on reset (not only at the next HA start) and
+    # links into the integration settings (SPECIAL first, G.O.A.T. right after)
+    mgr.hass.services.async_call.assert_awaited()
+    args = mgr.hass.services.async_call.await_args.args
+    assert args[0] == "persistent_notification" and args[1] == "create"
+    assert f"/config/integrations/integration/{DOMAIN}" in args[2]["message"]
+    assert profile["goat_prompted"] is True  # notification was sent (flag consumed)
     assert profile["level"] == 1 and profile["xp"] == 0 and profile["caps"] == 0
     assert profile["perks"] == [] and profile["tagged_skills"] == [] and profile["goat"] is None
     assert profile["skill_points_available"] == 0
@@ -137,6 +147,38 @@ def test_reset_profile_resets_character_only():
     assert task["id"] in mgr.data["tasks"]
     assert "p1" in mgr.data["projects"]
     assert mgr.data["projects"]["p1"]["task_ids"] == [task["id"]]
+
+
+def test_reset_profile_notifies_triggering_user():
+    """reset_profile resolves the HA user from the service-call context and addresses
+    the persistent notification to them (persistent notifications are global in HA,
+    so the text personalizes the message)."""
+    from types import SimpleNamespace
+
+    mgr = _manager()
+    mgr.hass.auth.async_get_user = AsyncMock(
+        return_value=SimpleNamespace(name="Matt")
+    )
+    mgr.hass.states.async_all = MagicMock(
+        return_value=[
+            SimpleNamespace(entity_id="person.x", attributes={"user_id": "u1"}),
+            SimpleNamespace(entity_id="person.other", attributes={"user_id": "u2"}),
+        ]
+    )
+    call = ServiceCall(
+        MagicMock(), DOMAIN, "reset_profile", {"person": "person.x"},
+        context=Context(user_id="u1"),
+    )
+    result = asyncio.run(mgr.reset_profile(call))
+    assert result["user"] == "Matt"
+    args = mgr.hass.services.async_call.await_args.args
+    assert "reset by Matt" in args[2]["message"]
+
+
+def test_triggering_user_without_context_returns_none():
+    mgr = _manager()
+    user, person = asyncio.run(mgr._triggering_user(_call("reset_profile", {})))
+    assert user is None and person is None
 
 
 def test_character_creation_pending_flag():

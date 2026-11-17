@@ -181,6 +181,11 @@ class GTDManager:
                     }
                 if setup.get("tagged_skills"):
                     profile["tagged_skills"] = list(setup["tagged_skills"])
+                if setup.get("goat"):
+                    # G.O.A.T. result submitted via the options flow (stored in _profiles)
+                    goat = dict(setup["goat"])
+                    goat.setdefault("completed_at", _now_iso())
+                    profile["goat"] = goat
 
     def _new_profile(self, person: str) -> dict[str, Any]:
         """Fresh FNV profile: all SPECIAL at 5, no XP/level/karma/caps/perks yet."""
@@ -611,29 +616,65 @@ class GTDManager:
         the options flow, the G.O.A.T. via the gamified-gtd-goat card)."""
         return not profile.get("goat") and not profile.get("tagged_skills")
 
-    async def async_character_creation_hint(self) -> None:
+    async def _triggering_user(self, call: ServiceCall) -> tuple[str | None, str | None]:
+        """Resolve the HA user that triggered `call` (via the service-call context) and
+        the person entity linked to that user.
+
+        Returns (user display name, person entity id); both None when the call has no
+        user context (e.g. an automation) or the user has no linked person entity.
+        HA's persistent_notification.create has no user field (notifications are shown
+        to everyone), so the character-creation notification is personalized in its
+        text with the triggering user instead.
+        """
+        context = getattr(call, "context", None)
+        user_id = getattr(context, "user_id", None)
+        if not user_id:
+            return None, None
+        user = await self.hass.auth.async_get_user(user_id)
+        user_name = user.name if user else None
+        for state in self.hass.states.async_all("person"):
+            if state.attributes.get("user_id") == user_id:
+                return user_name, state.entity_id
+        return user_name, None
+
+    async def async_character_creation_hint(
+        self, trigger_user: str | None = None, trigger_person: str | None = None
+    ) -> None:
         """One-time persistent notification per profile whose character creation is
-        still pending — pointing to the SPECIAL options step and the G.O.A.T. card.
-        Runs once at HA start (HA has no login event on the bus, so this is how a user
-        is reached after (re)starting Home Assistant). The `goat_prompted` flag makes
-        it fire only once per profile; reset_profile re-arms it for the next start."""
+        still pending. The message links straight into the integration settings, where
+        the options flow sets S.P.E.C.I.A.L. first and the G.O.A.T. follows directly
+        (no dashboard card needed). Runs once at HA start and immediately after
+        reset_profile (which passes the triggering user so the text addresses them).
+        The `goat_prompted` flag makes it fire only once per profile; reset_profile
+        re-arms it."""
+        # Deep link to the integration's settings page; its "Configure" button opens the
+        # options flow (init -> notify -> person -> S.P.E.C.I.A.L. -> G.O.A.T.). HA has
+        # no URL that starts a flow directly — flow start goes through the websocket API.
+        settings_link = f"[Open Gamified GTD settings](/config/integrations/integration/{DOMAIN})"
         changed = False
         for person, profile in self.data["profiles"].items():
             if not self.profile_pending_character_creation(profile) or profile.get("goat_prompted"):
                 continue
             profile["goat_prompted"] = True
             changed = True
+            if trigger_user and person == trigger_person:
+                message = (
+                    f"Your FNV character for {person} was reset by {trigger_user}. Redo "
+                    f"character creation — set S.P.E.C.I.A.L. (5 base + 5 free points) and "
+                    f"take the G.O.A.T. right after: {settings_link} → Configure."
+                )
+            else:
+                message = (
+                    f"{person}: set your S.P.E.C.I.A.L. attributes and take the G.O.A.T. "
+                    f"to determine your 3 Tag! skills: {settings_link} → Configure → "
+                    f"person → S.P.E.C.I.A.L. → G.O.A.T."
+                )
             await self.hass.services.async_call(
                 "persistent_notification",
                 "create",
                 {
                     "title": "Gamified GTD — character creation pending",
-                    "message": (
-                        f"{person}: set your S.P.E.C.I.A.L. attributes (integration options "
-                        f"→ S.P.E.C.I.A.L., 5 base + 5 free points) and take the G.O.A.T. to "
-                        "determine your 3 Tag! skills — add the 'Gamified GTD — G.O.A.T.' card "
-                        f"(custom:gamified-gtd-goat, person: {person}) to any dashboard."
-                    ),
+                    "message": message,
                     "notification_id": f"{DOMAIN}_goat_{person}",
                 },
                 blocking=False,
@@ -647,7 +688,8 @@ class GTDManager:
         skills, Tag! skills, skill points, perks, pending perk choice, caps and the
         G.O.A.T. state (HP/skill values derive from these and update automatically).
         Tasks, quests/projects, reviews, rewards and karma are NOT touched.
-        Afterwards the pending hint fires again so SPECIAL + G.O.A.T. are re-done."""
+        Afterwards the pending hint fires again immediately (addressed to the user who
+        triggered the reset, if any) so SPECIAL + G.O.A.T. are re-done."""
         profile = self._profile_from_call(call)
         fresh = self._new_profile(profile["person"])
         # keep identity + everything that is not character creation
@@ -657,11 +699,20 @@ class GTDManager:
                 profile[key] = value
         profile["goat_prompted"] = False  # re-arm the one-time character-creation hint
         await self._save()
-        self.hass.bus.async_fire(EVENT_PROFILE_RESET, {"person": profile["person"]})
+        # Who triggered the reset? Used to personalize the hint notification below.
+        user_name, user_person = await self._triggering_user(call)
+        self.hass.bus.async_fire(
+            EVENT_PROFILE_RESET, {"person": profile["person"], "user": user_name}
+        )
+        # Fire the pending hint right away (not only at the next HA start).
+        await self.async_character_creation_hint(
+            trigger_user=user_name, trigger_person=user_person
+        )
         return {
             "person": profile["person"],
             "reset": True,
             "character_creation_pending": self.profile_pending_character_creation(profile),
+            "user": user_name,
         }
 
     async def submit_goat(self, call: ServiceCall) -> dict[str, Any]:

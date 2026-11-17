@@ -207,8 +207,14 @@ Sneak, Speech, Survival, Unarmed.
 
 Character creation is "pending" for a profile until it has a G.O.A.T. result or Tag! skills
 (`character_creation_pending` attribute on the level sensor). Pending profiles get a one-time
-persistent notification (SPECIAL options + G.O.A.T. card) once at HA start — HA has
-no login event, so the startup notification is what the user sees right after starting HA.
+persistent notification once at HA start, and reset_profile sends it immediately to the
+triggering user (resolved via the service-call context user_id → person entity; persistent
+notifications are global in HA, so the message text names the user). The notification links to
+`/config/integrations/integration/gamified_gtd`; its options flow runs S.P.E.C.I.A.L. first and
+the G.O.A.T. directly after (one form with 10 dropdowns, questions + slide images in the
+markdown description) — HA has no login event and no URL that starts a flow directly, so
+"next login" is approximated by the HA-start notification and "click" by one click on
+"Configure" on the integration page.
 
 ## 6. Events
 
