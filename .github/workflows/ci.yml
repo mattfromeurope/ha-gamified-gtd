@@ -49,7 +49,7 @@ jobs:
       - name: Install homeassistant + pytest
         run: pip install homeassistant pytest
       - name: Run import smoke + setup tests
-        run: python -m pytest tests/test_imports.py tests/test_setup.py tests/test_todo.py -q
+        run: python -m pytest tests/test_imports.py tests/test_setup.py tests/test_todo.py tests/test_manager.py -q
 
   # Frontend: syntax-check the custom card module (ES module -> node --check).
   frontend:

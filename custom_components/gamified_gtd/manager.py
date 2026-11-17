@@ -570,8 +570,11 @@ class GTDManager:
         if not profile.get("perk_choice_pending"):
             raise ValueError("No perk choice pending (perks are available every 2 levels)")
         skills = self.effective_skills(profile)
+        # NOTE: perk_requirements_met expects the LIST of owned perk ids (it calls
+        # owned.count(...) internally for max_ranks) — passing the count int here
+        # broke every choose_perk call with "'int' object has no attribute 'count'".
         if not g.perk_requirements_met(
-            perk, profile["level"], profile["special"], skills, profile["perks"].count(perk_id)
+            perk, profile["level"], profile["special"], skills, profile["perks"]
         ):
             raise ValueError(f"Requirements for perk '{perk.name}' not met")
         profile["perks"].append(perk_id)
