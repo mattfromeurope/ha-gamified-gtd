@@ -32,7 +32,7 @@ screen is the Level-Up card:
 | `custom:gamified-gtd-levelup` | `person` — allocate skill points / choose the pending perk (the level-up dialogs) |
 | `custom:gamified-gtd-goat` | `person` — the **G.O.A.T.** (Vault 101 aptitude test): 10 questions with slide images, result sets the 3 Tag! skills — see below |
 | `custom:gamified-gtd-quests` | `title` — quest log with progress, new/complete quest |
-| `custom:gamified-gtd-tasks` | `list` (`inbox`/`next_actions`/`waiting_for`/`someday_maybe`/`all`), `assigned` (`all`/`me`/person), `show_completed` — full task form (title, notes, list, project, assigned, due date+time, priority, time estimate, energy, context, tags, reminders, overdue repeat, location condition), per-row **move-to-list** select, Clarify dialog for the inbox |
+| `custom:gamified-gtd-tasks` | GUI-editable: `title`, `list` (`inbox`/`next_actions`/`waiting_for`/`someday_maybe`/`all`/`completed`), `assigned` (`all`/`me`/person), `show_completed`, `sort` (`created`/`due`/`priority`/`title`), `details` (which badges show directly on the row). Rows expand/collapse on click (checkbox only completes), icon buttons for Clarify (inbox)/move/edit/delete, **Clarify all** in the inbox header, full task form incl. location condition + a Completed checkbox in the edit dialog, overdue dates highlighted |
 | `custom:gamified-gtd-review` | `person` — auto-checked weekly review checklist |
 | `custom:gamified-gtd-rewards` | `person` — caps reward shop with add/edit/delete of rewards |
 

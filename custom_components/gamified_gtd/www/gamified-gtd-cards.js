@@ -217,9 +217,33 @@ const cardCss = css`
   button:hover:not(:disabled) { background: var(--secondary-background-color, rgba(128, 128, 128, 0.15)); }
   button:disabled { opacity: 0.4; cursor: default; }
   .btns { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
-  .task { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--divider-color); flex-wrap: wrap; }
+  /* Task rows: .trow is the clickable line (toggles the details pane), .tdetails the
+     expanded pane below it. Row actions are small round icon buttons (.ibtn). */
+  .task { padding: 4px 0; border-bottom: 1px solid var(--divider-color); }
+  .task .trow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; cursor: pointer; border-radius: 8px; padding: 3px 6px; }
+  .task .trow:hover, .task.open .trow { background: var(--secondary-background-color, rgba(128, 128, 128, 0.12)); }
   .task .t-title { flex: 1; min-width: 120px; }
   .task.done .t-title { text-decoration: line-through; opacity: 0.6; }
+  .ibtn { border: none; padding: 4px; border-radius: 50%; display: inline-flex; background: transparent; }
+  .ibtn.wide { border-radius: 8px; padding: 6px 12px; gap: 6px; border: 1px solid var(--divider-color); }
+  .ibtn ha-icon { --mdc-icon-size: 18px; width: 18px; height: 18px; color: var(--secondary-text-color); }
+  .ibtn:hover:not(:disabled) { background: transparent; }
+  .ibtn:hover:not(:disabled) ha-icon { color: var(--primary-color); }
+  .task .chev { --mdc-icon-size: 16px; width: 16px; height: 16px; color: var(--secondary-text-color); flex: none; }
+  .tdetails { padding: 2px 8px 8px 34px; font-size: 0.85em; color: var(--secondary-text-color); }
+  .tdetails .t-notes { margin: 4px 0 6px; white-space: pre-wrap; color: var(--primary-text-color); }
+  .tdetails .row .lbl { min-width: 110px; }
+  .badge.overdue { color: var(--error-color, #db4437); border: 1px solid var(--error-color, #db4437); background: transparent; }
+  .overdue-txt { color: var(--error-color, #db4437); font-weight: 600; }
+  label.chk { display: flex; align-items: center; gap: 8px; color: var(--primary-text-color); font-size: 0.95em; }
+  /* GUI config editor (card settings dialog) */
+  .ed label { display: block; margin: 10px 0 3px; color: var(--secondary-text-color); font-size: 0.85em; }
+  .ed label.chk { color: var(--primary-text-color); }
+  .ed input[type="text"], .ed select {
+    width: 100%; box-sizing: border-box; font: inherit;
+    background: var(--secondary-background-color, var(--primary-background-color));
+    color: var(--primary-text-color); border: 1px solid var(--divider-color); border-radius: 8px; padding: 6px;
+  }
   .badge {
     background: var(--secondary-background-color, rgba(128, 128, 128, 0.15));
     color: var(--secondary-text-color); border-radius: 8px; padding: 1px 7px; font-size: 0.72em;
@@ -808,33 +832,73 @@ class GamifiedGTDQuestsCard extends LitElement {
 defineCard("gamified-gtd-quests", GamifiedGTDQuestsCard);
 
 /* ------------------------------------------------------------------ */
-/* Tasks card (with Clarify dialog for the inbox)                      */
+/* Tasks card (with Clarify dialog for the inbox) + GUI config editor  */
 /* ------------------------------------------------------------------ */
 
+// Detail fields that can be toggled visible directly on a task row (as badges).
+// Everything else (notes, reminders, location, times, ...) lives in the expandable
+// details pane. Config key: details: ["priority", "context", ...].
+const TASK_DETAIL_FIELDS = [
+  { id: "priority", label: "Priority" },
+  { id: "context", label: "Context" },
+  { id: "due", label: "Due date" },
+  { id: "assigned", label: "Assigned to" },
+  { id: "project", label: "Quest" },
+  { id: "tags", label: "Tags" },
+];
+
 class GamifiedGTDTasksCard extends LitElement {
-  // Tasks card: shows one GTD list (or all) from the todo.gtd_* entities.
-  // Items come from the entity attribute "todo_items" (HA does NOT expose todo
-  // items in state attributes by itself — the integration adds them explicitly),
-  // metadata from the attribute "tasks" keyed by uid. Rows can be moved between
-  // lists (move_task select) and assigned to quests; add/edit opens the full
-  // task form (same options as Better ToDo's dialog, plus list/project/time/
-  // energy). Config: list, assigned, show_completed, title.
+  // Tasks card: shows one GTD list ("inbox"/"next_actions"/"waiting_for"/"someday_maybe"),
+  // "all" lists, or the pseudo-list "completed" (done tasks collected from all lists).
+  // Items come from the entity attribute "todo_items" (HA does NOT expose todo items in
+  // state attributes by itself — the integration adds them explicitly), metadata from
+  // the attribute "tasks" keyed by uid.
+  //
+  // Row behavior (Better ToDo style): clicking the ROW toggles an expandable details
+  // pane; ONLY the checkbox completes a task (a "Completed" checkbox also exists in
+  // the edit dialog -> complete_task, so XP/caps/karma apply). In the inbox the row
+  // shows a Clarify icon button instead of the move dropdown; the header has a
+  // "Clarify all" button that walks through the inbox one task at a time. All row
+  // actions are small icon buttons (ha-icon + mdi:), theme-aware via currentColor.
+  //
+  // Config: title, list, assigned ("all"/"me"/person), show_completed, sort
+  // ("created"/"due"/"priority"/"title"), details (visible row badges) — editable in
+  // the GUI via getConfigElement().
   static get properties() {
-    return { hass: {}, config: {}, _dlg: {}, _task: {} };
+    return { hass: {}, config: {}, _dlg: {}, _task: {}, _open: {}, _clarifyAll: {} };
   }
   static getStubConfig() {
-    return { title: "NEXT ACTIONS", list: "next_actions", assigned: "all" };
+    return { title: "TASKS", list: "all", assigned: "all" };
+  }
+  // GUI editor: HA instantiates the editor element when the card is edited in the UI.
+  static getConfigElement() {
+    return document.createElement("gamified-gtd-tasks-editor");
   }
   setConfig(config) {
-    this.config = { assigned: "all", list: "all", show_completed: false, ...config };
+    this.config = {
+      title: "TASKS",
+      list: "all",
+      assigned: "all",
+      show_completed: false,
+      sort: "created",
+      details: TASK_DETAIL_FIELDS.map((f) => f.id),
+      ...config,
+    };
   }
   getCardSize() {
     return 5;
   }
-  // Collect todo items of the configured list(s) and apply the assigned filter
-  // ("me" = logged-in user's person entity, or an explicit person id).
+  _listLabel() {
+    if (this.config.list === "completed") return "COMPLETED";
+    return LISTS[this.config.list] ? LISTS[this.config.list].label : "ALL LISTS";
+  }
+  // Collect todo items of the configured list(s), apply the completed pseudo-list,
+  // the assigned filter ("me" = logged-in user's person entity, or an explicit person
+  // id) and the configured sorting.
   _items() {
-    const listKeys = this.config.list === "all" ? Object.keys(LISTS) : [this.config.list];
+    const cfg = this.config;
+    const listKeys =
+      cfg.list === "all" || cfg.list === "completed" ? Object.keys(LISTS) : [cfg.list];
     let items = [];
     for (const key of listKeys) {
       const st = this.hass.states[LISTS[key].entity];
@@ -844,15 +908,35 @@ class GamifiedGTDTasksCard extends LitElement {
         items.push({ ...it, list: key, meta: meta[it.uid] || {} });
       }
     }
-    const assigned = this.config.assigned;
+    if (cfg.list === "completed") {
+      items = items.filter((i) => i.status === "completed");
+    } else if (!cfg.show_completed) {
+      items = items.filter((i) => i.status !== "completed");
+    }
+    const assigned = cfg.assigned;
     if (assigned === "me") {
       const me = mePerson(this.hass);
       items = items.filter((i) => i.meta.assigned_to === me || !i.meta.assigned_to);
     } else if (assigned && assigned !== "all") {
       items = items.filter((i) => i.meta.assigned_to === assigned);
     }
-    if (!this.config.show_completed) items = items.filter((i) => i.status !== "completed");
+    const sort = cfg.sort || "created";
+    if (sort === "due") {
+      items.sort((a, b) => (a.due || "9999-12-31").localeCompare(b.due || "9999-12-31"));
+    } else if (sort === "priority") {
+      items.sort((a, b) => (a.meta.priority || 9) - (b.meta.priority || 9));
+    } else if (sort === "title") {
+      items.sort((a, b) => (a.summary || "").localeCompare(b.summary || ""));
+    }
+    // "created" keeps the entity/insertion order
     return items;
+  }
+  // Overdue = due date (YYYY-MM-DD) before today and not completed.
+  _isOverdue(i) {
+    if (i.status === "completed" || !i.due) return false;
+    const t = new Date();
+    const today = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+    return i.due < today;
   }
   // Quest name lookup for the project badge on a task row.
   _questName(projectId) {
@@ -860,39 +944,117 @@ class GamifiedGTDTasksCard extends LitElement {
     const q = log && log.attributes.quests ? log.attributes.quests[projectId] : null;
     return q ? q.name : projectId;
   }
+  // Row badges — only the detail fields enabled in the card config.
+  _badges(i) {
+    const d = this.config.details || [];
+    const m = i.meta;
+    const out = [];
+    if (d.includes("priority") && m.priority) out.push(html`<span class="badge">P${m.priority}</span>`);
+    if (d.includes("context") && m.context) out.push(html`<span class="badge">${m.context}</span>`);
+    if (d.includes("due") && i.due) {
+      out.push(html`<span class="badge ${this._isOverdue(i) ? "overdue" : ""}">${i.due}${m.due_time ? " " + m.due_time : ""}</span>`);
+    }
+    if (d.includes("assigned") && m.assigned_to) {
+      out.push(html`<span class="badge">${m.assigned_to.replace("person.", "")}</span>`);
+    }
+    if (d.includes("project") && m.project_id) {
+      out.push(html`<span class="badge">Q: ${this._questName(m.project_id)}</span>`);
+    }
+    if (d.includes("tags")) for (const t of m.tags || []) out.push(html`<span class="badge">#${t}</span>`);
+    return out;
+  }
+  // Expandable details pane (shown when the row is clicked): everything not on the row.
+  _detailsPane(i) {
+    const m = i.meta;
+    const loc = m.location;
+    return html`<div class="tdetails">
+      ${i.description ? html`<div class="t-notes">${i.description}</div>` : ""}
+      <div class="row"><span class="lbl">LIST</span><span class="val">${LISTS[i.list] ? LISTS[i.list].label : i.list}</span></div>
+      ${i.due ? html`<div class="row"><span class="lbl">DUE</span><span class="val ${this._isOverdue(i) ? "overdue-txt" : ""}">${i.due}${m.due_time ? " " + m.due_time : ""}${this._isOverdue(i) ? " (overdue)" : ""}</span></div>` : ""}
+      ${m.priority ? html`<div class="row"><span class="lbl">PRIORITY</span><span class="val">P${m.priority}</span></div>` : ""}
+      ${m.assigned_to ? html`<div class="row"><span class="lbl">ASSIGNED</span><span class="val">${m.assigned_to}</span></div>` : ""}
+      ${m.project_id ? html`<div class="row"><span class="lbl">QUEST</span><span class="val">${this._questName(m.project_id)}</span></div>` : ""}
+      ${m.context ? html`<div class="row"><span class="lbl">CONTEXT</span><span class="val">${m.context}</span></div>` : ""}
+      ${m.tags && m.tags.length ? html`<div class="row"><span class="lbl">TAGS</span><span class="val">${m.tags.map((t) => "#" + t).join(" ")}</span></div>` : ""}
+      ${m.time_estimate != null ? html`<div class="row"><span class="lbl">TIME EST.</span><span class="val">${m.time_estimate} min</span></div>` : ""}
+      ${m.energy ? html`<div class="row"><span class="lbl">ENERGY</span><span class="val">${m.energy}/5</span></div>` : ""}
+      ${m.reminders && m.reminders.length ? html`<div class="row"><span class="lbl">REMINDERS</span><span class="val">${m.reminders.join(", ")} min before</span></div>` : ""}
+      ${m.overdue_repeat ? html`<div class="row"><span class="lbl">OVERDUE REPEAT</span><span class="val">every ${m.overdue_repeat} min</span></div>` : ""}
+      ${loc ? html`<div class="row"><span class="lbl">LOCATION</span><span class="val">${loc.mode} ${loc.zone}</span></div>` : ""}
+      ${m.created_at ? html`<div class="row"><span class="lbl">CREATED</span><span class="val">${m.created_at}</span></div>` : ""}
+    </div>`;
+  }
+  // "Clarify all": walk through the inbox one task at a time (each needs its own decision).
+  _clarifyAllStart() {
+    this._clarifyAll = true;
+    const first = this._items().find((i) => i.list === "inbox" && i.status !== "completed");
+    if (first) {
+      this._task = first;
+      this._dlg = "clarify";
+    } else {
+      this._clarifyAll = false;
+    }
+  }
+  _clarifyClosed() {
+    this._dlg = null;
+    if (this._clarifyAll) {
+      const cur = this._task && this._task.uid;
+      const next = this._items().find(
+        (i) => i.list === "inbox" && i.status !== "completed" && i.uid !== cur
+      );
+      if (next) {
+        this._task = next;
+        this._dlg = "clarify";
+      } else {
+        this._clarifyAll = false;
+      }
+    }
+  }
   render() {
     const items = this._items();
+    const isInbox = this.config.list === "inbox";
+    const inboxOpen = isInbox ? items.filter((i) => i.status !== "completed").length : 0;
     return html`
       <ha-card>
-        <div class="head"><span class="title">${this.config.title || "TASKS"}</span>
-          <span class="sub">${LISTS[this.config.list] ? LISTS[this.config.list].label : "ALL LISTS"}</span></div>
+        <div class="head">
+          <span class="title">${this.config.title || "TASKS"}</span>
+          <span class="sub">${this._listLabel()}</span>
+          ${isInbox && inboxOpen > 0
+            ? html`<button class="ibtn" title="Clarify all inbox tasks" @click=${() => this._clarifyAllStart()}><ha-icon icon="mdi:playlist-check"></ha-icon></button>`
+            : ""}
+        </div>
         ${items.length === 0 ? html`<div class="empty">Nothing here. War never changes… but this list is empty.</div>` : ""}
-        ${items.map((i) => html`
-          <div class="task ${i.status === "completed" ? "done" : ""}">
-            <input type="checkbox" .checked=${i.status === "completed"}
-              @change=${() => svc(this.hass, "complete_task", { task_id: i.uid })} />
-            <span class="t-title">${i.summary}</span>
-            ${i.meta.priority ? html`<span class="badge">P${i.meta.priority}</span>` : ""}
-            ${i.meta.context ? html`<span class="badge">${i.meta.context}</span>` : ""}
-            ${i.due ? html`<span class="badge">${i.due}</span>` : ""}
-            ${i.meta.assigned_to ? html`<span class="badge">${i.meta.assigned_to.replace("person.", "")}</span>` : ""}
-            ${i.meta.project_id ? html`<span class="badge">Q: ${this._questName(i.meta.project_id)}</span>` : ""}
-            ${(i.meta.tags || []).map((t) => html`<span class="badge">#${t}</span>`)}
-            <select class="move" title="Move to another list"
-              @change=${(e) => svc(this.hass, "move_task", { task_id: i.uid, list: e.target.value })}>
-              ${Object.entries(LISTS).map(([k, l]) => html`<option value=${k} ?selected=${i.list === k}>${l.label}</option>`)}
-            </select>
-            ${i.list === "inbox" ? html`<button @click=${() => { this._task = i; this._dlg = "clarify"; }}>Clarify</button>` : ""}
-            <button @click=${() => { this._task = i; this._dlg = "edit"; }}>Edit</button>
-            <button @click=${() => svc(this.hass, "remove_task", { task_id: i.uid })}>✕</button>
-          </div>`)}
-        <div class="btns"><button @click=${() => { this._task = null; this._dlg = "add"; }}>+ Add task</button></div>
+        ${items.map((i) => {
+          const open = this._open === i.uid;
+          return html`
+          <div class="task ${i.status === "completed" ? "done" : ""} ${open ? "open" : ""}">
+            <div class="trow" @click=${() => (this._open = open ? null : i.uid)}>
+              <input type="checkbox" .checked=${i.status === "completed"}
+                @click=${(e) => e.stopPropagation()}
+                @change=${() => svc(this.hass, "complete_task", { task_id: i.uid })} />
+              <span class="t-title">${i.summary}</span>
+              ${this._badges(i)}
+              <ha-icon class="chev" icon=${open ? "mdi:chevron-up" : "mdi:chevron-down"}></ha-icon>
+              ${i.list === "inbox"
+                ? html`<button class="ibtn" title="Clarify" @click=${(e) => { e.stopPropagation(); this._task = i; this._dlg = "clarify"; this._clarifyAll = false; }}><ha-icon icon="mdi:help-circle-outline"></ha-icon></button>`
+                : html`<select class="move" title="Move to another list" @click=${(e) => e.stopPropagation()}
+                    @change=${(e) => svc(this.hass, "move_task", { task_id: i.uid, list: e.target.value })}>
+                    ${Object.entries(LISTS).map(([k, l]) => html`<option value=${k} ?selected=${i.list === k}>${l.label}</option>`)}
+                  </select>`}
+              <button class="ibtn" title="Edit" @click=${(e) => { e.stopPropagation(); this._task = i; this._dlg = "edit"; }}><ha-icon icon="mdi:pencil-outline"></ha-icon></button>
+              <button class="ibtn" title="Delete" @click=${(e) => { e.stopPropagation(); svc(this.hass, "remove_task", { task_id: i.uid }); }}><ha-icon icon="mdi:trash-can-outline"></ha-icon></button>
+            </div>
+            ${open ? this._detailsPane(i) : ""}
+          </div>`;
+        })}
+        <div class="btns"><button class="ibtn wide" title="Add task" @click=${() => { this._task = null; this._dlg = "add"; }}><ha-icon icon="mdi:plus"></ha-icon> Add task</button></div>
         ${this._renderTaskDialog()}
         ${this._renderClarifyDialog()}
       </ha-card>`;
   }
   // The full task form (same options as Better ToDo's task dialog, plus the GTD /
-  // gamification fields: list, project, time estimate, energy).
+  // gamification fields: list, project, time estimate, energy). In edit mode there is
+  // also a "Completed" checkbox -> complete_task (XP/caps/karma) on save.
   _taskFields() {
     const t = this._task;
     const m = (t && t.meta) || {};
@@ -901,7 +1063,9 @@ class GamifiedGTDTasksCard extends LitElement {
     const log = this.hass.states["sensor.gtd_quest_log"];
     const quests = log ? Object.entries(log.attributes.quests || {}).filter(([, q]) => q.status === "active") : [];
     const loc = m.location || null;
+    const isAdd = this._dlg === "add";
     return html`
+      ${!isAdd ? html`<label class="chk"><input id="td-done" type="checkbox" .checked=${t && t.status === "completed"} /> Completed</label>` : ""}
       <label>Title</label><input id="td-title" type="text" .value=${t ? t.summary : ""} />
       <label>Notes</label><textarea id="td-notes">${t && t.description ? t.description : ""}</textarea>
       <label>List</label>
@@ -962,6 +1126,11 @@ class GamifiedGTDTasksCard extends LitElement {
               await svc(this.hass, "add_to_inbox", data);
             } else {
               await svc(this.hass, "update_task", { task_id: this._task.uid, ...data });
+              // "Completed" checkbox in the edit dialog -> complete_task (XP/caps/karma)
+              const doneBox = this.shadowRoot.querySelector("#td-done");
+              if (doneBox && doneBox.checked && this._task.status !== "completed") {
+                await svc(this.hass, "complete_task", { task_id: this._task.uid });
+              }
             }
             this._dlg = null;
           }}>${isAdd ? "Add" : "Save"}</button>
@@ -974,7 +1143,7 @@ class GamifiedGTDTasksCard extends LitElement {
     if (this._dlg !== "clarify" || !this._task) return "";
     const log = this.hass.states["sensor.gtd_quest_log"];
     const projects = log ? Object.entries(log.attributes.quests || {}).filter(([, q]) => q.status === "active") : [];
-    return html`<ha-dialog .open=${true} @closed=${() => (this._dlg = null)} .heading=${`CLARIFY: ${this._task.summary}`}>
+    return html`<ha-dialog .open=${true} @closed=${() => this._clarifyClosed()} .heading=${`CLARIFY: ${this._task.summary}`}>
       <div class="dlg">
         <div class="seg" id="cl-decision">
           ${["next_action", "project", "waiting_for", "someday", "done"].map((d, i) =>
@@ -1015,6 +1184,72 @@ class GamifiedGTDTasksCard extends LitElement {
   }
 }
 defineCard("gamified-gtd-tasks", GamifiedGTDTasksCard);
+
+// GUI config editor for the tasks card — HA shows it in the card's edit dialog and
+// listens for "config-changed" (bubbles/composed) to store the new config.
+class GamifiedGTDTasksEditor extends LitElement {
+  static get properties() {
+    return { hass: {}, config: {} };
+  }
+  _fire(config) {
+    this.dispatchEvent(
+      new CustomEvent("config-changed", { detail: { config }, bubbles: true, composed: true })
+    );
+  }
+  render() {
+    const c = this.config || {};
+    const persons = entitiesOf(this.hass, "person");
+    const lists = [
+      { id: "all", label: "All lists" },
+      { id: "completed", label: "Completed (from all lists)" },
+      ...Object.entries(LISTS).map(([k, l]) => ({ id: k, label: l.label })),
+    ];
+    const assignedOpts = [
+      { id: "all", label: "Everyone" },
+      { id: "me", label: "Only me (logged-in user)" },
+      ...persons.map((p) => ({ id: p, label: p })),
+    ];
+    const sorts = [
+      ["created", "Created (default)"],
+      ["due", "Due date"],
+      ["priority", "Priority"],
+      ["title", "Title"],
+    ];
+    const details = c.details || TASK_DETAIL_FIELDS.map((f) => f.id);
+    return html`
+      <div class="ed">
+        <label>Title</label>
+        <input type="text" .value=${c.title || ""} @change=${(e) => this._fire({ ...c, title: e.target.value })} />
+        <label>List</label>
+        <select @change=${(e) => this._fire({ ...c, list: e.target.value })}>
+          ${lists.map((l) => html`<option value=${l.id} ?selected=${(c.list || "all") === l.id}>${l.label}</option>`)}
+        </select>
+        <label>Assigned to</label>
+        <select @change=${(e) => this._fire({ ...c, assigned: e.target.value })}>
+          ${assignedOpts.map((o) => html`<option value=${o.id} ?selected=${(c.assigned || "all") === o.id}>${o.label}</option>`)}
+        </select>
+        <label>Sort by</label>
+        <select @change=${(e) => this._fire({ ...c, sort: e.target.value })}>
+          ${sorts.map(([v, l]) => html`<option value=${v} ?selected=${(c.sort || "created") === v}>${l}</option>`)}
+        </select>
+        <label class="chk"><input type="checkbox" .checked=${c.show_completed === true}
+          @change=${(e) => this._fire({ ...c, show_completed: e.target.checked })} /> Show completed tasks</label>
+        <label>Details shown directly on the row</label>
+        ${TASK_DETAIL_FIELDS.map((f) => html`
+          <label class="chk"><input type="checkbox" .checked=${details.includes(f.id)}
+            @change=${(e) => {
+              const cur = new Set(details);
+              if (e.target.checked) cur.add(f.id);
+              else cur.delete(f.id);
+              this._fire({ ...c, details: [...cur] });
+            }} /> ${f.label}</label>`)}
+      </div>`;
+  }
+  static get styles() {
+    return cardCss;
+  }
+}
+defineCard("gamified-gtd-tasks-editor", GamifiedGTDTasksEditor);
 
 /* ------------------------------------------------------------------ */
 /* Review card                                                         */

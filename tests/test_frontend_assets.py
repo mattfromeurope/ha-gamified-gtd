@@ -60,6 +60,16 @@ def test_cards_read_todo_items_attribute():
     # and the move-between-lists + project assignment UI must exist
     assert '"move_task"' in src
     assert "td-project" in src
+    # tasks card rework: icon buttons, expand/collapse rows, clarify-all in the inbox,
+    # completed pseudo-list, sorting, per-card detail visibility, GUI config editor
+    for marker in [
+        "mdi:trash-can-outline", "mdi:pencil-outline", "mdi:help-circle-outline",
+        "mdi:playlist-check", "mdi:chevron-down",
+        "_clarifyAllStart", '"completed"', "_isOverdue", ".badge.overdue",
+        "td-done", "TASK_DETAIL_FIELDS", "getConfigElement",
+        'defineCard("gamified-gtd-tasks-editor"', "config-changed",
+    ]:
+        assert marker in src, f"tasks card marker missing: {marker}"
     # rewards card: redeem + manage (add/edit/delete) via services
     assert '"redeem_reward"' in src
     assert '"add_reward"' in src
