@@ -874,9 +874,11 @@ class GamifiedGTDQuestsCard extends LitElement {
     return { xp, caps: Math.round(xp / 10) };
   }
   _questRow(id, q, isDone) {
+    // Click selects — and the selection STAYS until another quest is clicked.
+    // No hover effect (unlike the SPECIAL/skills cards) on purpose.
     const sel = this._sel === id;
     return html`<div class="arow ${sel ? "sel" : ""} ${isDone ? "qdone" : ""}"
-      @click=${() => (this._sel = id)} @mouseenter=${() => (this._sel = id)}>
+      @click=${() => (this._sel = id)}>
       ${icon("quest", id, "?")}
       <span class="nm">${q.name}</span>
       <span class="val">${isDone ? "✓ " : ""}${q.progress}</span>

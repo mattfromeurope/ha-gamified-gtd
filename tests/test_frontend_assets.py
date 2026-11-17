@@ -85,6 +85,11 @@ def test_cards_read_todo_items_attribute():
         "mdi:check-circle-outline",
     ]:
         assert marker in src, f"quests card marker missing: {marker}"
+    # quest selection is click-only: no @mouseenter in the quests card block
+    # (hover must not change the selection; SPECIAL/skills cards keep their hover)
+    qstart = src.index("Quests card")
+    qend = src.index("Tasks card", qstart)
+    assert "@mouseenter" not in src[qstart:qend], "quests card must not select on hover"
     # rewards card: redeem + manage (add/edit/delete) via services
     assert '"redeem_reward"' in src
     assert '"add_reward"' in src
