@@ -1197,6 +1197,12 @@ class GamifiedGTDTasksEditor extends LitElement {
   static get properties() {
     return { hass: {}, config: {} };
   }
+  // HA's card-editor wrapper pushes the raw stored card config into the editor element:
+  // newer frontends call setConfig(value), older ones assign .config directly —
+  // support both, so the editor always sees the current YAML config.
+  setConfig(config) {
+    this.config = config;
+  }
   _fire(config) {
     this.dispatchEvent(
       new CustomEvent("config-changed", { detail: { config }, bubbles: true, composed: true })

@@ -68,6 +68,10 @@ def test_cards_read_todo_items_attribute():
         "_clarifyAllStart", '"completed"', "_isOverdue", ".badge.overdue",
         "td-done", "TASK_DETAIL_FIELDS", "getConfigElement",
         'defineCard("gamified-gtd-tasks-editor"', "config-changed",
+        # editor must implement setConfig (HA's editor wrapper calls it with the raw
+        # stored config; older versions assign .config) — otherwise the editor never
+        # sees the YAML values and fired configs drop options
+        "this.config = config;",
         # editor must merge shared defaults (full config fired) and bind select .value
         "tasksCardDefaults", ".value=${c.list", ".value=${c.assigned", ".value=${c.sort",
     ]:
