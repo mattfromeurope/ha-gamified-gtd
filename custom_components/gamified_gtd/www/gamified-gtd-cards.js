@@ -1144,14 +1144,17 @@ class GamifiedGTDTasksCard extends LitElement {
               overdue_repeat: q("#td-overdue") ? Number(q("#td-overdue")) : undefined,
             };
             if (zone) data.location = { zone, mode: q("#td-locmode") || "inside" };
+            // Fire-and-forget: the dialog closes immediately and the row appears as
+            // soon as the state push arrives (backend fires data_updated at once) —
+            // awaiting the service response here would add a visible delay.
             if (isAdd) {
-              await svc(this.hass, "add_to_inbox", data);
+              svc(this.hass, "add_to_inbox", data);
             } else {
-              await svc(this.hass, "update_task", { task_id: this._task.uid, ...data });
+              svc(this.hass, "update_task", { task_id: this._task.uid, ...data });
               // "Completed" checkbox in the edit dialog -> complete_task (XP/caps/karma)
               const doneBox = this.shadowRoot.querySelector("#td-done");
               if (doneBox && doneBox.checked && this._task.status !== "completed") {
-                await svc(this.hass, "complete_task", { task_id: this._task.uid });
+                svc(this.hass, "complete_task", { task_id: this._task.uid });
               }
             }
             this._dlg = null;
@@ -1193,7 +1196,7 @@ class GamifiedGTDTasksCard extends LitElement {
             if (pname) data.project_name = pname;
             const out = this.shadowRoot.querySelector("#cl-outcome").value;
             if (out) data.desired_outcome = out;
-            await svc(this.hass, "clarify", data);
+            svc(this.hass, "clarify", data); // fire-and-forget: dialog closes at once
             this._dlg = null;
           }}>Clarify</button>
           <button @click=${() => (this._dlg = null)}>Cancel</button>
