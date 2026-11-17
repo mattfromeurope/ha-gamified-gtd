@@ -68,6 +68,8 @@ def test_cards_read_todo_items_attribute():
         "_clarifyAllStart", '"completed"', "_isOverdue", ".badge.overdue",
         "td-done", "TASK_DETAIL_FIELDS", "getConfigElement",
         'defineCard("gamified-gtd-tasks-editor"', "config-changed",
+        # editor must merge shared defaults (full config fired) and bind select .value
+        "tasksCardDefaults", ".value=${c.list", ".value=${c.assigned", ".value=${c.sort",
     ]:
         assert marker in src, f"tasks card marker missing: {marker}"
     # rewards card: redeem + manage (add/edit/delete) via services

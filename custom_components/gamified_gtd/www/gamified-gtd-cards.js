@@ -846,6 +846,20 @@ const TASK_DETAIL_FIELDS = [
   { id: "project", label: "Quest" },
   { id: "tags", label: "Tags" },
 ];
+// Shared config defaults for the tasks card — used by BOTH the card (setConfig) and
+// the GUI editor. The editor must fire the FULL merged config: HA hands it the raw
+// stored YAML config, so options that exist only as runtime defaults would otherwise
+// vanish from the YAML as soon as the editor fires a change.
+function tasksCardDefaults() {
+  return {
+    title: "TASKS",
+    list: "all",
+    assigned: "all",
+    show_completed: false,
+    sort: "created",
+    details: TASK_DETAIL_FIELDS.map((f) => f.id),
+  };
+}
 
 class GamifiedGTDTasksCard extends LitElement {
   // Tasks card: shows one GTD list ("inbox"/"next_actions"/"waiting_for"/"someday_maybe"),
@@ -875,15 +889,7 @@ class GamifiedGTDTasksCard extends LitElement {
     return document.createElement("gamified-gtd-tasks-editor");
   }
   setConfig(config) {
-    this.config = {
-      title: "TASKS",
-      list: "all",
-      assigned: "all",
-      show_completed: false,
-      sort: "created",
-      details: TASK_DETAIL_FIELDS.map((f) => f.id),
-      ...config,
-    };
+    this.config = { ...tasksCardDefaults(), ...config };
   }
   getCardSize() {
     return 5;
@@ -1197,7 +1203,9 @@ class GamifiedGTDTasksEditor extends LitElement {
     );
   }
   render() {
-    const c = this.config || {};
+    // Merge the raw stored config over the shared defaults — the editor always fires a
+    // COMPLETE config, so no option silently disappears from the YAML on change.
+    const c = { ...tasksCardDefaults(), ...(this.config || {}) };
     const persons = entitiesOf(this.hass, "person");
     const lists = [
       { id: "all", label: "All lists" },
@@ -1221,16 +1229,16 @@ class GamifiedGTDTasksEditor extends LitElement {
         <label>Title</label>
         <input type="text" .value=${c.title || ""} @change=${(e) => this._fire({ ...c, title: e.target.value })} />
         <label>List</label>
-        <select @change=${(e) => this._fire({ ...c, list: e.target.value })}>
-          ${lists.map((l) => html`<option value=${l.id} ?selected=${(c.list || "all") === l.id}>${l.label}</option>`)}
+        <select .value=${c.list || "all"} @change=${(e) => this._fire({ ...c, list: e.target.value })}>
+          ${lists.map((l) => html`<option value=${l.id}>${l.label}</option>`)}
         </select>
         <label>Assigned to</label>
-        <select @change=${(e) => this._fire({ ...c, assigned: e.target.value })}>
-          ${assignedOpts.map((o) => html`<option value=${o.id} ?selected=${(c.assigned || "all") === o.id}>${o.label}</option>`)}
+        <select .value=${c.assigned || "all"} @change=${(e) => this._fire({ ...c, assigned: e.target.value })}>
+          ${assignedOpts.map((o) => html`<option value=${o.id}>${o.label}</option>`)}
         </select>
         <label>Sort by</label>
-        <select @change=${(e) => this._fire({ ...c, sort: e.target.value })}>
-          ${sorts.map(([v, l]) => html`<option value=${v} ?selected=${(c.sort || "created") === v}>${l}</option>`)}
+        <select .value=${c.sort || "created"} @change=${(e) => this._fire({ ...c, sort: e.target.value })}>
+          ${sorts.map(([v, l]) => html`<option value=${v}>${l}</option>`)}
         </select>
         <label class="chk"><input type="checkbox" .checked=${c.show_completed === true}
           @change=${(e) => this._fire({ ...c, show_completed: e.target.checked })} /> Show completed tasks</label>
