@@ -1,4 +1,5 @@
-/* Gamified GTD — Pip-Boy style custom cards.
+/* Gamified GTD — custom Lovelace cards that follow the selected HA theme.
+ * (Content is FNV/Pip-Boy flavored; all colors come from theme variables.)
  *
  * lit is loaded via dynamic import() instead of a static `import ... from "lit"`:
  * only recent HA frontends (>= 2025.12) expose "lit" through an import map in
@@ -24,7 +25,7 @@ function defineCard(tag, cls) {
   if (!customElements.get(tag)) customElements.define(tag, cls);
 }
 
-/* Gamified GTD — Pip-Boy style custom cards (continued).
+/* Gamified GTD — custom cards (continued).
  *
  * Icons: original Fallout icons (SPECIAL, skills, perks, quests, GOAT slides)
  * are copyrighted and NOT shipped. Drop your own files into
@@ -134,105 +135,89 @@ function icon(kind, id, fallback, big) {
   /></span>`;
 }
 
-const pipCss = css`
-  :host {
-    --pip: #4aff4a;
-    --pip-dim: #2a9e2e;
-    --pip-dark: #0a1f0a;
-  }
+// Theme-aware card styles: everything visual comes from the selected HA theme
+// (card background, text colors, dividers, primary color), so the cards blend in
+// with the built-in cards and follow the active theme. The FNV/Pip-Boy flavor
+// lives only in the content (labels, structure) and the optional drop-in icons.
+const cardCss = css`
   ha-card {
-    background: linear-gradient(180deg, #0c240c 0%, #071707 100%);
-    color: var(--pip);
-    font-family: "Courier New", ui-monospace, monospace;
-    border: 1px solid var(--pip-dim);
-    box-shadow: inset 0 0 24px rgba(74, 255, 74, 0.12);
-    padding: 12px 14px;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
+    padding: 16px;
+    color: var(--primary-text-color);
+    font-family: inherit;
   }
-  .head {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    border-bottom: 1px solid var(--pip-dim);
-    padding-bottom: 6px;
-    margin-bottom: 8px;
-  }
-  .head .title { font-weight: bold; font-size: 1.05em; }
-  .head .sub { color: var(--pip-dim); font-size: 0.8em; }
+  .head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+  .head .title { font-weight: 600; font-size: 1.1em; }
+  .head .sub { color: var(--secondary-text-color); font-size: 0.85em; }
   .row { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
-  .lbl { width: 90px; color: var(--pip-dim); font-size: 0.85em; }
-  .val { font-weight: bold; }
-  .bar {
-    flex: 1; height: 12px; border: 1px solid var(--pip-dim);
-    background: var(--pip-dark); position: relative;
-  }
-  .bar > div { height: 100%; background: var(--pip); opacity: 0.85; }
-  .bar > span {
-    position: absolute; inset: 0; text-align: center;
-    font-size: 0.7em; line-height: 12px; color: #04140a; font-weight: bold;
-  }
-  /* Pip-Boy 3000 top bar (layout of the stats card): HP | LEVEL+XP | CAPS. */
-  .topbar { display: flex; align-items: stretch; gap: 12px; }
+  .lbl { min-width: 90px; color: var(--secondary-text-color); font-size: 0.85em; }
+  .val { font-weight: 600; }
+  .bar { flex: 1; height: 8px; border-radius: 4px; background: var(--divider-color); overflow: hidden; }
+  .bar > div { height: 100%; background: var(--primary-color); opacity: 0.75; }
+  .xpsub { margin-left: auto; color: var(--secondary-text-color); font-size: 0.75em; }
+  /* Top-bar layout of the stats card (HP | LEVEL+XP | CAPS), in theme colors. */
+  .topbar { display: flex; align-items: stretch; gap: 16px; }
   .topbar .seg { display: flex; align-items: center; gap: 8px; }
   .topbar .seg.hp { flex: 1.4; }
-  .topbar .seg.lvl { flex: 2; flex-direction: column; align-items: stretch; gap: 2px; }
+  .topbar .seg.lvl { flex: 2; flex-direction: column; align-items: stretch; gap: 4px; }
   .topbar .seg.caps { flex: 0.8; justify-content: flex-end; }
-  .topbar .seg .big { font-size: 1.3em; font-weight: bold; }
-  .topbar .seg .cap { font-size: 0.75em; color: var(--pip-dim); }
+  .topbar .seg .big { font-size: 1.3em; font-weight: 600; }
+  .topbar .seg .cap { font-size: 0.75em; color: var(--secondary-text-color); }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 4px 10px; margin-top: 6px; }
   .cell { display: flex; align-items: center; gap: 6px; font-size: 0.85em; }
-  .gicon { position: relative; display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; flex: none; }
+  .gicon { position: relative; display: inline-flex; width: 24px; height: 24px; align-items: center; justify-content: center; flex: none; }
   .gicon.big { width: 96px; height: 96px; }
-  .gicon img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; filter: sepia(1) hue-rotate(70deg) saturate(4); }
-  .gicon-fb { font-size: 0.75em; font-weight: bold; border: 1px solid var(--pip-dim); padding: 1px 3px; }
+  .gicon img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+  .gicon-fb { font-size: 0.75em; font-weight: 600; border: 1px solid var(--divider-color); border-radius: 4px; padding: 1px 4px; color: var(--secondary-text-color); }
   .gicon.big .gicon-fb { font-size: 1.6em; padding: 6px 10px; }
-  /* SPECIAL / skills rows like the Pip-Boy STATS pages. */
-  .srow { display: flex; align-items: center; gap: 10px; padding: 4px 0; border-bottom: 1px dashed rgba(74,255,74,0.2); }
-  .srow .nm { width: 150px; font-size: 0.85em; color: var(--pip-dim); }
-  .srow .bar { height: 10px; }
+  /* Attribute / skill rows (STATS-page layout) in theme colors. */
+  .srow { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--divider-color); }
+  .srow .nm { width: 150px; font-size: 0.85em; color: var(--secondary-text-color); }
+  .srow .bar { height: 8px; }
   .srow .val { width: 34px; text-align: right; }
-  .tagbadge { border: 1px solid var(--pip); color: var(--pip); font-size: 0.65em; padding: 0 4px; margin-left: 6px; }
-  .perk { border: 1px solid var(--pip-dim); padding: 6px 8px; margin-bottom: 6px; }
-  .perk .p-name { font-weight: bold; display: flex; align-items: center; gap: 8px; }
-  .perk .p-desc { color: var(--pip-dim); font-size: 0.78em; text-transform: none; margin-top: 2px; }
-  button, .btn {
-    font-family: inherit; text-transform: uppercase; letter-spacing: 0.04em;
-    background: transparent; color: var(--pip); border: 1px solid var(--pip-dim);
-    padding: 4px 10px; cursor: pointer; font-size: 0.85em;
+  .tagbadge { border: 1px solid var(--primary-color); color: var(--primary-color); font-size: 0.65em; border-radius: 4px; padding: 0 4px; margin-left: 6px; }
+  .perk { border: 1px solid var(--divider-color); border-radius: 8px; padding: 8px 10px; margin-bottom: 6px; }
+  .perk .p-name { font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .perk .p-desc { color: var(--secondary-text-color); font-size: 0.85em; margin-top: 2px; }
+  button {
+    font: inherit; background: transparent; color: var(--primary-text-color);
+    border: 1px solid var(--divider-color); border-radius: 8px; padding: 6px 12px; cursor: pointer;
   }
-  button:hover:not(:disabled), .btn:hover { background: var(--pip); color: #04140a; }
-  button:disabled { opacity: 0.35; cursor: default; }
+  button:hover:not(:disabled) { background: var(--secondary-background-color, rgba(128, 128, 128, 0.15)); }
+  button:disabled { opacity: 0.4; cursor: default; }
   .btns { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
-  .task { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px dashed rgba(74,255,74,0.2); flex-wrap: wrap; }
+  .task { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--divider-color); flex-wrap: wrap; }
   .task .t-title { flex: 1; min-width: 120px; }
   .task.done .t-title { text-decoration: line-through; opacity: 0.6; }
-  .badge { border: 1px solid var(--pip-dim); padding: 0 5px; font-size: 0.72em; color: var(--pip-dim); }
-  select.move { background: var(--pip-dark); color: var(--pip); border: 1px solid var(--pip-dim); font-family: inherit; font-size: 0.72em; text-transform: uppercase; }
-  .checklist { margin: 6px 0; }
-  .checklist .cl-ok { color: var(--pip); }
-  .checklist .cl-no { color: #ff5f56; }
-  .quest { border: 1px solid var(--pip-dim); padding: 6px 8px; margin-bottom: 6px; }
-  .quest .q-name { font-weight: bold; }
-  .quest .q-outcome { color: var(--pip-dim); font-size: 0.8em; text-transform: none; }
-  ha-dialog { --mdc-dialog-min-width: 460px; }
-  ha-dialog .dlg { color: var(--pip); font-family: "Courier New", ui-monospace, monospace; text-transform: uppercase; max-height: 62vh; overflow-y: auto; }
-  ha-dialog label { display: block; margin: 8px 0 2px; color: var(--pip-dim); font-size: 0.8em; }
-  ha-dialog input, ha-dialog select, ha-dialog textarea {
-    width: 100%; background: var(--pip-dark); color: var(--pip);
-    border: 1px solid var(--pip-dim); padding: 6px; font-family: inherit; box-sizing: border-box;
+  .badge {
+    background: var(--secondary-background-color, rgba(128, 128, 128, 0.15));
+    color: var(--secondary-text-color); border-radius: 8px; padding: 1px 7px; font-size: 0.72em;
   }
-  ha-dialog textarea { min-height: 48px; }
+  select.move, ha-dialog input, ha-dialog select, ha-dialog textarea {
+    font: inherit; background: var(--secondary-background-color, var(--primary-background-color));
+    color: var(--primary-text-color); border: 1px solid var(--divider-color); border-radius: 8px; padding: 6px;
+  }
+  select.move { font-size: 0.75em; padding: 2px 4px; }
+  .checklist { margin: 6px 0; }
+  .checklist .cl-ok { color: var(--success-color, #4caf50); }
+  .checklist .cl-no { color: var(--error-color, #db4437); }
+  .quest { border: 1px solid var(--divider-color); border-radius: 8px; padding: 8px 10px; margin-bottom: 6px; }
+  .quest .q-name { font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .quest .q-outcome { color: var(--secondary-text-color); font-size: 0.85em; }
+  ha-dialog { --mdc-dialog-min-width: 460px; }
+  ha-dialog .dlg { color: var(--primary-text-color); max-height: 62vh; overflow-y: auto; }
+  ha-dialog label { display: block; margin: 10px 0 3px; color: var(--secondary-text-color); font-size: 0.85em; }
+  ha-dialog input, ha-dialog select { width: 100%; box-sizing: border-box; }
+  ha-dialog textarea { width: 100%; min-height: 48px; box-sizing: border-box; }
   .seg { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
-  .seg button.on { background: var(--pip); color: #04140a; }
-  .empty { color: var(--pip-dim); font-style: italic; text-transform: none; }
+  .seg button.on { background: var(--primary-color); border-color: var(--primary-color); color: var(--text-primary-color, #fff); }
+  .empty { color: var(--secondary-text-color); font-style: italic; }
   /* G.O.A.T. card */
   .goat-slide { display: flex; justify-content: center; margin: 8px 0; }
-  .goat-q { font-size: 0.95em; text-transform: none; line-height: 1.4; margin: 8px 0; }
-  .goat-answers button { display: block; width: 100%; text-align: left; margin: 6px 0; text-transform: none; white-space: normal; }
-  .goat-job { border: 1px solid var(--pip); padding: 8px; margin: 8px 0; }
-  .goat-job .j-name { font-weight: bold; font-size: 1.1em; }
-  .goat-job .j-comment { color: var(--pip-dim); font-size: 0.8em; text-transform: none; margin-top: 4px; }
+  .goat-q { font-size: 0.95em; line-height: 1.4; margin: 8px 0; }
+  .goat-answers button { display: block; width: 100%; text-align: left; margin: 6px 0; white-space: normal; }
+  .goat-job { border: 1px solid var(--primary-color); border-radius: 8px; padding: 10px; margin: 8px 0; }
+  .goat-job .j-name { font-weight: 600; font-size: 1.1em; }
+  .goat-job .j-comment { color: var(--secondary-text-color); font-size: 0.85em; margin-top: 4px; }
 `;
 
 // Call a gamified_gtd service — the ONLY write path from cards (thin-frontend rule).
@@ -252,8 +237,8 @@ async function svcResp(hass, service, data) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Stats card — Pip-Boy 3000 top bar: HP | LEVEL + XP bar | CAPS        */
-/* (display only, like the in-game top bar; karma row below)           */
+/* Stats card — top-bar layout (HP | LEVEL + XP bar | CAPS), theme colors */
+/* (display only; karma row below)                                     */
 /* ------------------------------------------------------------------ */
 
 class GamifiedGTDStatsCard extends LitElement {
@@ -294,8 +279,9 @@ class GamifiedGTDStatsCard extends LitElement {
             <div class="bar"><div style="width:100%"></div><span>${hp ? hp.state : "?"}</span></div>
           </div>
           <div class="seg lvl">
-            <div class="row"><span class="cap">LEVEL</span><span class="big">${level.state}</span></div>
-            <div class="bar"><div style="width:${xpPct}%"></div><span>XP ${a.xp} / -${a.xp_to_next}</span></div>
+            <div class="row"><span class="cap">LEVEL</span><span class="big">${level.state}</span>
+              <span class="xpsub">XP ${a.xp} / -${a.xp_to_next}</span></div>
+            <div class="bar"><div style="width:${xpPct}%"></div></div>
           </div>
           <div class="seg caps">
             <span class="cap">CAPS</span>
@@ -310,7 +296,7 @@ class GamifiedGTDStatsCard extends LitElement {
       </ha-card>`;
   }
   static get styles() {
-    return pipCss;
+    return cardCss;
   }
 }
 defineCard("gamified-gtd-stats", GamifiedGTDStatsCard);
@@ -349,7 +335,7 @@ class GamifiedGTDSPECIALCard extends LitElement {
       </ha-card>`;
   }
   static get styles() {
-    return pipCss;
+    return cardCss;
   }
 }
 defineCard("gamified-gtd-special", GamifiedGTDSPECIALCard);
@@ -392,7 +378,7 @@ class GamifiedGDTDSkillsCard extends LitElement {
       </ha-card>`;
   }
   static get styles() {
-    return pipCss;
+    return cardCss;
   }
 }
 defineCard("gamified-gtd-skills", GamifiedGDTDSkillsCard);
@@ -431,7 +417,7 @@ class GamifiedGTDPerksCard extends LitElement {
       </ha-card>`;
   }
   static get styles() {
-    return pipCss;
+    return cardCss;
   }
 }
 defineCard("gamified-gtd-perks", GamifiedGTDPerksCard);
@@ -528,7 +514,7 @@ class GamifiedGTDLevelupCard extends LitElement {
     </ha-dialog>`;
   }
   static get styles() {
-    return pipCss;
+    return cardCss;
   }
 }
 defineCard("gamified-gtd-levelup", GamifiedGTDLevelupCard);
@@ -642,7 +628,7 @@ class GamifiedGTDGoatCard extends LitElement {
     `;
   }
   static get styles() {
-    return pipCss;
+    return cardCss;
   }
 }
 defineCard("gamified-gtd-goat", GamifiedGTDGoatCard);
@@ -682,7 +668,7 @@ class GamifiedGTDQuestsCard extends LitElement {
           return html`<div class="quest">
             <div class="q-name">${icon("quest", id, "?")}${q.name}</div>
             <div class="q-outcome">${q.desired_outcome || ""}</div>
-            <div class="row"><div class="bar"><div style="width:${pct}%"></div><span>${q.progress}</span></div>
+            <div class="row"><div class="bar"><div style="width:${pct}%"></div></div><span class="val">${q.progress}</span>
               ${q.due ? html`<span class="badge">due ${q.due}</span>` : ""}
               <button @click=${() => svc(this.hass, "complete_project", { project_id: id })}>Complete</button>
             </div>
@@ -716,7 +702,7 @@ class GamifiedGTDQuestsCard extends LitElement {
     </ha-dialog>`;
   }
   static get styles() {
-    return pipCss;
+    return cardCss;
   }
 }
 defineCard("gamified-gtd-quests", GamifiedGTDQuestsCard);
@@ -925,7 +911,7 @@ class GamifiedGTDTasksCard extends LitElement {
     </ha-dialog>`;
   }
   static get styles() {
-    return pipCss;
+    return cardCss;
   }
 }
 defineCard("gamified-gtd-tasks", GamifiedGTDTasksCard);
@@ -973,7 +959,7 @@ class GamifiedGTDReviewCard extends LitElement {
       </ha-card>`;
   }
   static get styles() {
-    return pipCss;
+    return cardCss;
   }
 }
 defineCard("gamified-gtd-review", GamifiedGTDReviewCard);
@@ -1017,7 +1003,7 @@ class GamifiedGTDRewardsCard extends LitElement {
       </ha-card>`;
   }
   static get styles() {
-    return pipCss;
+    return cardCss;
   }
 }
 defineCard("gamified-gtd-rewards", GamifiedGTDRewardsCard);

@@ -225,8 +225,11 @@ HA built-ins (todo list card, developer tools, automations); the card is just th
 variant. Services themselves cannot open dialogs/popups in HA — dialogs are opened by the card
 (or via browser_mod in automations).
 
-Ten separate card types (auto-registered by the integration, YAML-configurable). The profile
-cards mirror the Pip-Boy 3000 pages from the game and are **display-only** (no Add/Edit/Delete
+Ten separate card types (auto-registered by the integration, YAML-configurable). **Styling is
+theme-aware**: all colors use HA theme variables (`--primary-text-color`, `--divider-color`,
+`--primary-color`, card background), so the cards match the built-in cards and follow the active
+theme — the Pip-Boy look is only in the layout/content (top bar, STATS-page rows, drop-in icons).
+The profile cards mirror the Pip-Boy 3000 pages and are **display-only** (no Add/Edit/Delete
 buttons); interactivity (skill points, perk choice) lives in the dedicated Level-Up card.
 
 | Card type | Shows / does | YAML options | Built-in equivalent |

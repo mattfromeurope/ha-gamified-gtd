@@ -12,13 +12,16 @@ The full, agreed design lives in [DESIGN.md](DESIGN.md).
 ## Status
 
 Backend (config flow, storage, `todo` entities, sensors, services, events) and the ten
-Pip-Boy-style custom cards are in place.
+custom cards are in place.
 
 ## Custom cards
 
 Auto-registered by the integration (hard-refresh the browser once after an update).
-The profile cards follow the Pip-Boy 3000 layout from the game (display only, no
-Add/Edit/Delete buttons); the interactive character screen is the Level-Up card:
+The cards are **theme-aware**: all colors come from the selected HA theme (card
+background, text, dividers, primary color), so they match the built-in cards; the FNV
+content (labels, drop-in icons) stays. The profile cards follow the Pip-Boy 3000 layout
+from the game (display only, no Add/Edit/Delete buttons); the interactive character
+screen is the Level-Up card:
 
 | Card type | Config |
 |---|---|

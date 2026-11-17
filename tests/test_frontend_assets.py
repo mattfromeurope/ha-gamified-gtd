@@ -62,6 +62,18 @@ def test_cards_read_todo_items_attribute():
     assert "td-project" in src
 
 
+def test_cards_are_theme_aware_not_pipboy_green():
+    """The cards must follow the selected HA theme (theme variables), not the old
+    hardcoded Pip-Boy green — so they blend in with the built-in cards."""
+    src = CARDS.read_text(encoding="utf-8")
+    assert "4aff4a" not in src, "hardcoded Pip-Boy green still present"
+    assert "--pip:" not in src
+    assert "sepia(1)" not in src, "green icon filter still present"
+    assert "text-transform: uppercase" not in src
+    for var in ("var(--primary-text-color)", "var(--divider-color)", "var(--primary-color)"):
+        assert var in src, f"theme variable {var} missing"
+
+
 def test_vendored_lit_bundle_exists_and_exports_lit_api():
     assert LIT.exists(), "vendored lit bundle gamified-gtd-lit.js is missing"
     lit = LIT.read_text(encoding="utf-8")
