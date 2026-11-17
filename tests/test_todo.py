@@ -117,3 +117,24 @@ def test_todo_write_through_servicecall_carries_data():
     asyncio.run(ent.async_delete_todo_items(["t1"]))
     call3 = mgr.remove_task.call_args[0][0]
     assert call3.data["task_id"] == "t1"
+
+
+def test_todo_update_listener_accepts_event_arg():
+    """Regression: bus.async_listen passes the fired event as an argument
+    (async_run_hass_job -> target(*args)). A zero-arg listener raises TypeError on every
+    event and never runs — the todo entities then only refresh via the 30s poll, which
+    showed up as multi-second UI lag. The listener must accept the event."""
+    import inspect
+
+    from custom_components.gamified_gtd.todo import GTDTodoListEntity
+
+    params = list(inspect.signature(GTDTodoListEntity._handle_coordinator_update).parameters)
+    assert params == ["self", "event"], params
+    # and updates are event-driven, not polled (check on an instance: HA turns _attr_*
+    # class attributes into properties via __init_subclass__)
+    from unittest.mock import MagicMock
+
+    mgr = MagicMock()
+    mgr.entry_id = "e1"
+    ent = GTDTodoListEntity(mgr, "inbox", "GTD Inbox")
+    assert ent.should_poll is False

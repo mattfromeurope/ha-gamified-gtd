@@ -47,8 +47,14 @@ class GTDTodoListEntity(TodoListEntity):
         self._attr_name = name
         self._attr_unique_id = f"{manager.entry_id}_{list_key}"
 
+    # Updates are event-driven (EVENT_DATA_UPDATED), not polled. NOTE: bus.async_listen
+    # passes the event as an argument (async_run_hass_job calls target(*args)), so the
+    # listener MUST accept it — a zero-arg listener raises TypeError on every event and
+    # never runs (entities then only refresh via the 30s poll = visible UI lag).
+    _attr_should_poll = False
+
     @callback
-    def _handle_coordinator_update(self) -> None:
+    def _handle_coordinator_update(self, event=None) -> None:
         self.async_write_ha_state()
 
     async def async_added_to_hass(self) -> None:
