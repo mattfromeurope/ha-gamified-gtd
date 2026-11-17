@@ -64,5 +64,7 @@ jobs:
         run: |
           cp custom_components/gamified_gtd/www/gamified-gtd-cards.js /tmp/cards.mjs
           cp custom_components/gamified_gtd/www/gamified-gtd-lit.js /tmp/lit-bundle.mjs
+          cp custom_components/gamified_gtd/www/gamified-gtd-placeholders.js /tmp/placeholders.mjs
           node --check /tmp/cards.mjs
           node --check /tmp/lit-bundle.mjs
+          node --check /tmp/placeholders.mjs
