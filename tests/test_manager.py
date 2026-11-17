@@ -270,7 +270,8 @@ def test_save_fires_refresh_event_immediately_and_debounces_disk_write():
 
     mgr = _manager()
     mgr._store = MagicMock()
-    asyncio.run(mgr._save())
+    # _manager() replaces _save with an AsyncMock — call the real method here
+    asyncio.run(GTDManager._save(mgr))
     # refresh event fired, disk write debounced not awaited
     mgr.hass.bus.async_fire.assert_called_once_with(EVENT_DATA_UPDATED, {"entry_id": "e1"})
     mgr._store.async_delay_save.assert_called_once()
