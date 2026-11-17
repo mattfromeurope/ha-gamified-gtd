@@ -71,6 +71,13 @@ URLs, which HA's `index.html` imports on every page load. If a card shows
    browser tab** (Ctrl/Cmd+Shift+R). The extra-module list is baked into the served
    index page, and the JS itself is cached for a month (the `?v=` parameter changes with
    every release, so updates are picked up automatically).
+   Note the split: **card JS** changes only need a browser hard-refresh (cache-busted via
+   `?v=<manifest version>`), but **Python changes** (services, manager, entities) are only
+   imported at a **full HA start** — reloading the integration does NOT re-import them.
+   If the UI reacts instantly but data changes lag a few seconds, the running HA still
+   has the old Python code: restart HA (System → Restart), then check again. Quick check:
+   Developer Tools → States — watch `todo.gtd_inbox` right after moving a task; if the
+   entity updates instantly but the card does not, it is frontend, otherwise backend.
 2. In the browser DevTools, check the console for `Failed to load extra module ...` and
    the Network tab for `/gamified_gtd_static/gamified-gtd-cards.js` — it must return 200
    with a JavaScript content type. A 404 means the static path was not registered (check
