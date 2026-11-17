@@ -25,6 +25,7 @@ from homeassistant.helpers import selector
 
 from . import gamification as g
 from .goat_data import QUESTIONS, goat_result
+from .manager import get_manager
 from .const import (
     CONF_CONTEXTS,
     SPECIAL_BASE,
@@ -269,11 +270,29 @@ class GamifiedGDTOptionsFlow(OptionsFlow):
             # While character creation is pending (no G.O.A.T. result and no Tag!
             # skills yet), the G.O.A.T. follows directly after S.P.E.C.I.A.L.; for an
             # already-created character the manual Tag! picker is shown instead.
-            setup = self._options.get("_profiles", {}).get(self._person, {})
-            if not setup.get("goat") and not setup.get("tagged_skills"):
+            if self._character_creation_pending():
                 return await self.async_step_goat()
             return await self.async_step_tags()
         return self.async_show_form(step_id="special", data_schema=_special_schema())
+
+    def _character_creation_pending(self) -> bool:
+        """True while the chosen person has neither a G.O.A.T. result nor Tag! skills.
+
+        Source of truth is the manager's STORED profile (changed by submit_goat and by
+        reset_profile) — the options '_profiles' are only the delivery mechanism for
+        values submitted via this flow, so after reset_profile they may still hold the
+        old setup. Falls back to '_profiles' when no manager is loaded (e.g. in tests).
+        """
+        try:
+            mgr = get_manager(self.hass)
+        except Exception:  # noqa: BLE001 - no manager (yet) -> fall back to options
+            mgr = None
+        if mgr is not None:
+            profile = mgr.data.get("profiles", {}).get(self._person)
+            if profile is not None:
+                return not profile.get("goat") and not profile.get("tagged_skills")
+        setup = self._options.get("_profiles", {}).get(self._person, {})
+        return not setup.get("goat") and not setup.get("tagged_skills")
 
     async def async_step_goat(
         self, user_input: dict[str, Any] | None = None

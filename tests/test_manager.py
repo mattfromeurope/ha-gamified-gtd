@@ -181,6 +181,33 @@ def test_triggering_user_without_context_returns_none():
     assert user is None and person is None
 
 
+def test_reset_profile_also_clears_profiles_entry_in_options():
+    """reset_profile must drop the person's '_profiles' entry from the config entry
+    options — otherwise the options flow would still route to the manual tags step
+    (stale G.O.A.T./Tag! setup) and _ensure_profiles would re-apply the old values
+    on the next start after the options-triggered reload."""
+    from types import SimpleNamespace
+
+    mgr = _manager()
+    mgr._options = {"_profiles": {"person.x": {"goat": {"tags": ["guns"]},
+                                               "tagged_skills": ["guns"]}}}
+    entry = SimpleNamespace(
+        options={"persons": ["person.x"],
+                 "_profiles": {"person.x": {"goat": {"tags": ["guns"]},
+                                            "tagged_skills": ["guns"]}}}
+    )
+    mgr.hass.config_entries.async_get_entry.return_value = entry
+    mgr.hass.config_entries.async_update_entry = MagicMock()
+
+    asyncio.run(mgr.reset_profile(_call("reset_profile", {"person": "person.x"})))
+
+    mgr.hass.config_entries.async_update_entry.assert_called_once()
+    _, kwargs = mgr.hass.config_entries.async_update_entry.call_args
+    assert kwargs["options"]["_profiles"] == {}
+    assert kwargs["options"]["persons"] == ["person.x"]  # other options untouched
+    assert mgr._options["_profiles"] == {}  # in-memory view in sync
+
+
 def test_character_creation_pending_flag():
     mgr = _manager()
     profile = _profile(mgr)

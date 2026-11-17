@@ -19,6 +19,7 @@ import voluptuous_serialize  # noqa: E402
 from homeassistant.helpers import config_validation as cv  # noqa: E402
 
 from custom_components.gamified_gtd.config_flow import GamifiedGDTOptionsFlow  # noqa: E402
+from custom_components.gamified_gtd.const import DOMAIN  # noqa: E402
 from custom_components.gamified_gtd.goat_data import QUESTIONS  # noqa: E402
 
 SPECIAL_STATS = (
@@ -34,10 +35,13 @@ def _valid_special_input() -> dict:
     return values
 
 
-def _flow(profiles: dict | None = None, person: str = "person.x") -> GamifiedGDTOptionsFlow:
+def _flow(profiles: dict | None = None, person: str = "person.x", managers=None) -> GamifiedGDTOptionsFlow:
     flow = GamifiedGDTOptionsFlow()
     flow._options = {"_profiles": profiles or {}}
     flow._person = person
+    # no manager loaded by default -> get_manager raises -> flow falls back to _profiles
+    flow.hass = MagicMock()
+    flow.hass.data = {DOMAIN: {"managers": managers or []}}
     return flow
 
 
@@ -98,6 +102,23 @@ def test_special_step_routes_to_goat_while_character_creation_pending():
     assert result["step_id"] == "goat"
 
 
+def test_special_step_uses_manager_profile_not_stale_options_after_reset():
+    """Regression: after reset_profile the options '_profiles' may still hold the old
+    G.O.A.T./Tag! setup, but the manager's stored profile is reset — the flow must then
+    route to the G.O.A.T., not the manual tags step."""
+    mgr = MagicMock()
+    mgr.data = {"profiles": {"person.x": {"goat": None, "tagged_skills": []}}}
+    flow = _flow(profiles={"person.x": {"goat": {"tags": ["guns"]}, "tagged_skills": ["guns"]}},
+                 managers=[mgr])
+    result = asyncio.run(flow.async_step_special(_valid_special_input()))
+    assert result["step_id"] == "goat"
+    # and the reverse: character exists in the manager profile -> tags step
+    mgr.data = {"profiles": {"person.x": {"goat": {"tags": ["guns"]}, "tagged_skills": ["guns"]}}}
+    flow2 = _flow(profiles={}, managers=[mgr])
+    result2 = asyncio.run(flow2.async_step_special(_valid_special_input()))
+    assert result2["step_id"] == "tags"
+
+
 def test_special_step_rejects_wrong_total_and_reshows_form():
     """All attributes at 5 = 35 points, not 40 -> base error, form re-shown."""
     flow = _flow(profiles={})
@@ -125,6 +146,7 @@ def test_all_step_schemas_serialize_for_frontend():
     'Unknown error occurred' after OK on the person step (special form never shown)."""
     flow = _flow()
     flow.hass = MagicMock()
+    flow.hass.data = {DOMAIN: {"managers": []}}  # no manager -> fall back to _profiles
     flow.hass.states.async_all.return_value = [MagicMock(entity_id="person.x")]
     entry = MagicMock()
     entry.data = {"persons": ["person.x"]}

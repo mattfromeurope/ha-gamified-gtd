@@ -699,6 +699,19 @@ class GTDManager:
                 profile[key] = value
         profile["goat_prompted"] = False  # re-arm the one-time character-creation hint
         await self._save()
+        # Also drop the person's "_profiles" entry from the config entry options:
+        # otherwise the options flow would still see an old G.O.A.T./Tag! setup and
+        # route to the manual tags step (not the G.O.A.T.), and _ensure_profiles would
+        # re-apply the old SPECIAL/Tag! values on the next start after a reload.
+        entry = self.hass.config_entries.async_get_entry(self.entry_id)
+        if entry is not None and isinstance(entry.options, dict):
+            options = dict(entry.options)
+            option_profiles = dict(options.get("_profiles", {}))
+            if option_profiles.pop(profile["person"], None) is not None:
+                options["_profiles"] = option_profiles
+                self._options["_profiles"] = option_profiles  # keep the in-memory view in sync
+                # triggers the entry's update listener -> reload with the cleared options
+                self.hass.config_entries.async_update_entry(entry, options=options)
         # Who triggered the reset? Used to personalize the hint notification below.
         user_name, user_person = await self._triggering_user(call)
         self.hass.bus.async_fire(
