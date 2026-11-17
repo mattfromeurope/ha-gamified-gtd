@@ -27,6 +27,13 @@ SPECIAL_STATS = (
 )
 
 
+def _valid_special_input() -> dict:
+    """A valid FNV allocation: all attributes at 5 plus 5 free points = 40 total."""
+    values = {s: "5" for s in SPECIAL_STATS}
+    values["strength"] = "10"
+    return values
+
+
 def _flow(profiles: dict | None = None, person: str = "person.x") -> GamifiedGDTOptionsFlow:
     flow = GamifiedGDTOptionsFlow()
     flow._options = {"_profiles": profiles or {}}
@@ -66,13 +73,21 @@ def test_goat_step_submit_stores_special_goat_and_tags():
 
 def test_special_step_routes_to_goat_while_character_creation_pending():
     flow = _flow(profiles={})
-    result = asyncio.run(flow.async_step_special({s: "5" for s in SPECIAL_STATS}))
+    result = asyncio.run(flow.async_step_special(_valid_special_input()))
     assert result["step_id"] == "goat"
+
+
+def test_special_step_rejects_wrong_total_and_reshows_form():
+    """All attributes at 5 = 35 points, not 40 -> base error, form re-shown."""
+    flow = _flow(profiles={})
+    result = asyncio.run(flow.async_step_special({s: "5" for s in SPECIAL_STATS}))
+    assert result["type"] == "form" and result["step_id"] == "special"
+    assert "40" in result["errors"]["base"]
 
 
 def test_special_step_routes_to_tags_when_character_exists():
     flow = _flow(profiles={"person.x": {"tagged_skills": ["guns"]}})
-    result = asyncio.run(flow.async_step_special({s: "5" for s in SPECIAL_STATS}))
+    result = asyncio.run(flow.async_step_special(_valid_special_input()))
     assert result["step_id"] == "tags"
 
 
@@ -112,9 +127,7 @@ def test_all_step_schemas_serialize_for_frontend():
         _serialize(r)  # person
         r = await flow.async_step_person({"person": "person.x"})
         _serialize(r)  # special
-        valid = {s: "5" for s in SPECIAL_STATS}
-        valid["strength"] = "10"  # total 40
-        r = await flow.async_step_special(valid)
+        r = await flow.async_step_special(_valid_special_input())
         _serialize(r)  # goat (character creation pending)
         # invalid SPECIAL (35 != 40) re-shows the form with a base error
         r = await flow.async_step_special({s: "5" for s in SPECIAL_STATS})
