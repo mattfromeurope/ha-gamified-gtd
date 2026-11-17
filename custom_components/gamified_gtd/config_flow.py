@@ -5,12 +5,15 @@ contexts); one entry per person selection (unique id = sorted person list).
 
 Options flow steps: init (globals) -> notify (notify service per person, daily summary,
 HA notification, unassigned-to-all) -> person (pick one) -> special (7 SPECIAL values)
--> tags (3 Tag! skills). Per-person setup is stored under "_profiles" and applied by
-the manager on load.
+-> goat (10 G.O.A.T. questions, one per form with radio-button answers, while
+character creation is pending) or tags (3 Tag! skills, when it is already done).
+Per-person setup is stored under "_profiles" and applied by the manager on load.
 """
 
 from __future__ import annotations
 
+import os
+from datetime import datetime, timezone
 from typing import Any
 
 import voluptuous as vol
@@ -21,6 +24,8 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import selector
 
 from . import gamification as g
+from .goat_data import QUESTIONS, goat_result
+from .manager import get_manager
 from .const import (
     CONF_CONTEXTS,
     SPECIAL_BASE,
@@ -71,6 +76,19 @@ def _validate_special(value: dict[str, Any]) -> dict[str, Any]:
             f"got {total}"
         )
     return value
+
+
+def _special_schema() -> vol.Schema:
+    """Plain serializable schema for the 7 SPECIAL allocator fields (no custom function
+    inside vol.All — that breaks voluptuous_serialize.convert, see async_step_special)."""
+    return vol.Schema(
+        {
+            vol.Required(stat, default=SPECIAL_BASE): vol.All(
+                vol.Coerce(int), vol.Range(min=SPECIAL_MIN, max=SPECIAL_MAX)
+            )
+            for stat in g.SPECIAL_STATS
+        }
+    )
 
 
 def _base_schema(hass, defaults: dict[str, Any] | None = None) -> vol.Schema:
@@ -153,6 +171,10 @@ class GamifiedGDTOptionsFlow(OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Step 1: global options (persons, level cap, defaults, contexts)."""
+        # Plain OptionsFlow does NOT provide self._options in HA (only
+        # OptionsFlowWithConfigEntry sets it), so initialize it from the entry here.
+        if not hasattr(self, "_options"):
+            self._options = dict(self.config_entry.options)
         if user_input is not None:
             self._options = {**self._options, **user_input}
             return await self.async_step_notify()
@@ -232,33 +254,173 @@ class GamifiedGDTOptionsFlow(OptionsFlow):
         each starts at 5, 5 points are freely distributed (raise or lower, 1-10),
         so the total must be exactly 40 (enforced by _validate_special)."""
         if user_input is not None:
+            # Validate the 40-point rule here in the step and NOT via vol.All(...,
+            # _validate_special) in the data_schema: voluptuous_serialize.convert
+            # (used to send the form to the frontend) cannot serialize a plain
+            # function inside vol.All and raises -> "Unknown error occurred".
+            try:
+                _validate_special(user_input)
+            except vol.Invalid as err:
+                return self.async_show_form(
+                    step_id="special", data_schema=_special_schema(), errors={"base": str(err)}
+                )
             self._special = {
                 stat: int(user_input.get(stat, SPECIAL_BASE)) for stat in g.SPECIAL_STATS
             }
+            # While character creation is pending (no G.O.A.T. result and no Tag!
+            # skills yet), the G.O.A.T. follows directly after S.P.E.C.I.A.L.; for an
+            # already-created character the manual Tag! picker is shown instead.
+            if self._character_creation_pending():
+                return await self.async_step_goat()
             return await self.async_step_tags()
-        schema = vol.All(
-            vol.Schema(
-                {
-                    vol.Required(stat, default=SPECIAL_BASE): vol.All(
-                        vol.Coerce(int), vol.Range(min=SPECIAL_MIN, max=SPECIAL_MAX)
-                    )
-                    for stat in g.SPECIAL_STATS
-                }
-            ),
-            _validate_special,
+        return self.async_show_form(step_id="special", data_schema=_special_schema())
+
+    def _character_creation_pending(self) -> bool:
+        """True while the chosen person has neither a G.O.A.T. result nor Tag! skills.
+
+        Source of truth is the manager's STORED profile (changed by submit_goat and by
+        reset_profile) — the options '_profiles' are only the delivery mechanism for
+        values submitted via this flow, so after reset_profile they may still hold the
+        old setup. Falls back to '_profiles' when no manager is loaded (e.g. in tests).
+        """
+        try:
+            mgr = get_manager(self.hass)
+        except Exception:  # noqa: BLE001 - no manager (yet) -> fall back to options
+            mgr = None
+        if mgr is not None:
+            profile = mgr.data.get("profiles", {}).get(self._person)
+            if profile is not None:
+                return not profile.get("goat") and not profile.get("tagged_skills")
+        setup = self._options.get("_profiles", {}).get(self._person, {})
+        return not setup.get("goat") and not setup.get("tagged_skills")
+
+    async def async_step_goat(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """G.O.A.T. step (Fallout 3 Vault 101 test), shown directly after the
+        S.P.E.C.I.A.L. step while character creation is pending. ONE question per form:
+        the question text (+ slide image when the user dropped it in) goes into the
+        markdown description, the 4 answers are radio buttons (SelectSelectorMode.LIST
+        renders a ha-radio-group) directly below it — so every answer is clearly tied
+        to its question. After the 10th answer, _goat_finish scores the answers and
+        stores SPECIAL + G.O.A.T. result + Tag! skills on the person's profile — no
+        dashboard card needed."""
+        if not hasattr(self, "_goat_idx"):
+            self._goat_idx = 0  # 0-based index of the question currently shown
+            self._goat_answers = []
+        if user_input is not None:
+            # store the answer of the question that was just shown, then advance
+            self._goat_answers.append(int(user_input["answer"]))
+            self._goat_idx += 1
+            if self._goat_idx >= len(QUESTIONS):
+                return await self._goat_result_step()
+        q = QUESTIONS[self._goat_idx]
+        # Slide images are user drop-ins (original FNV art is copyrighted):
+        # www/gamified_gtd_icons/goat/slide_<n>.png, served under /<DOMAIN>_static/...
+        # Embed the image only when the file exists -> no broken images. Select option
+        # values must be strings (int values raise voluptuous errors -> frontend 400).
+        goat_dir = os.path.join(
+            os.path.dirname(__file__), "www", "gamified_gtd_icons", "goat"
         )
-        return self.async_show_form(step_id="special", data_schema=schema)
+        img = ""
+        if os.path.exists(os.path.join(goat_dir, f"{q.slide}.png")):
+            img = f"\n\n![G.O.A.T. slide {q.n}](/{DOMAIN}_static/gamified_gtd_icons/goat/{q.slide}.png)"
+        question_md = f"**Question {q.n} of {len(QUESTIONS)}.** {q.text}{img}"
+        schema = vol.Schema(
+            {
+                vol.Required("answer", default="0"): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            selector.SelectOptionDict(value=str(i), label=a.text)
+                            for i, a in enumerate(q.answers)
+                        ],
+                        mode=selector.SelectSelectorMode.LIST,  # -> radio buttons
+                    )
+                )
+            }
+        )
+        # async_show_form has no `description` kwarg — the step description comes from
+        # strings.json; the dynamic question markdown is injected via the {question}
+        # placeholder (rendered as markdown by the frontend).
+        return self.async_show_form(
+            step_id="goat",
+            data_schema=schema,
+            description_placeholders={"question": question_md},
+            last_step=self._goat_idx == len(QUESTIONS) - 1,
+        )
+
+    async def _goat_result_step(self) -> ConfigFlowResult:
+        """Score the collected G.O.A.T. answers and show the result step (3 Tag! skills
+        + the vault job), asking whether the user wants to adjust the Tag! skills
+        manually instead."""
+        result = goat_result(self._goat_answers)
+        self._goat_result = {
+            "answers": self._goat_answers,
+            "counts": result["counts"],
+            "tags": result["tags"],
+            "job": result["job"],
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+        }
+        job = result["job"]
+        result_md = (
+            f"**Your Tag! skills:** {', '.join(result['tags'])}\n\n"
+            f"**Your vault job:** {job['name']}\n\n"
+            f"*{job['comment']}*"
+        )
+        return self.async_show_form(
+            step_id="goat_result",
+            data_schema=vol.Schema(
+                {vol.Required("adjust_tags", default=False): bool}
+            ),
+            description_placeholders={"result": result_md},
+            last_step=True,
+        )
+
+    async def async_step_goat_result(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """G.O.A.T. result step: shows the 3 Tag! skills + vault job and asks whether
+        to adjust the Tag! skills manually. 'No' finishes the flow with the G.O.A.T.
+        result; 'yes' continues to the manual Tag! picker (the G.O.A.T. result is kept
+        on the profile either way)."""
+        if user_input is not None:
+            if user_input.get("adjust_tags"):
+                return await self.async_step_tags()
+            return self._goat_store(self._goat_result["tags"])
+        # re-show (e.g. after a validation error elsewhere) — recompute the form
+        return await self._goat_result_step()
+
+    def _goat_store(self, tagged_skills: list[str]) -> ConfigFlowResult:
+        """Store SPECIAL + the G.O.A.T. result + the (possibly manually adjusted)
+        Tag! skills on the chosen person's profile and finish the options flow."""
+        profiles = dict(self._options.get("_profiles", {}))
+        profiles[self._person] = {
+            "special": self._special,
+            "goat": self._goat_result,
+            "tagged_skills": tagged_skills,
+        }
+        self._options["_profiles"] = profiles
+        self._options[CONF_DEFAULT_PROFILE] = self._options.get(
+            CONF_DEFAULT_PROFILE, self._person
+        )
+        return self.async_create_entry(title="", data=self._options)
 
     async def async_step_tags(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Step 5: choose the 3 Tag! skills (+15 each); finishes the options flow."""
+        """Step 5 (alternative): choose the 3 Tag! skills (+15 each) manually; finishes
+        the options flow. Only shown when character creation is already done — while it
+        is pending, the G.O.A.T. step follows S.P.E.C.I.A.L. instead."""
         if user_input is not None:
+            # merge into any existing setup for this person — keep a previously stored
+            # G.O.A.T. result when the user only adjusts the Tag! skills afterwards
             profiles = dict(self._options.get("_profiles", {}))
-            profiles[self._person] = {
-                "special": self._special,
-                "tagged_skills": user_input["tagged_skills"],
-            }
+            setup = dict(profiles.get(self._person, {}))
+            setup["special"] = self._special
+            setup["tagged_skills"] = user_input["tagged_skills"]
+            if getattr(self, "_goat_result", None):
+                setup["goat"] = self._goat_result
+            profiles[self._person] = setup
             self._options["_profiles"] = profiles
             self._options[CONF_DEFAULT_PROFILE] = self._options.get(
                 CONF_DEFAULT_PROFILE, self._person

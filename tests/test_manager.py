@@ -19,7 +19,7 @@ pytest.importorskip("homeassistant")
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from homeassistant.core import ServiceCall  # noqa: E402
+from homeassistant.core import Context, ServiceCall  # noqa: E402
 
 from custom_components.gamified_gtd.const import DOMAIN  # noqa: E402
 from custom_components.gamified_gtd.manager import GTDManager  # noqa: E402
@@ -31,6 +31,8 @@ def _manager() -> GTDManager:
     mgr.data = mgr._initial_data()
     mgr.data["profiles"]["person.x"] = mgr._new_profile("person.x")
     mgr._save = AsyncMock()  # don't touch real storage
+    # the character-creation hint posts a persistent notification via the service bus
+    mgr.hass.services.async_call = AsyncMock()
     return mgr
 
 
@@ -100,6 +102,121 @@ def test_update_task_project_link_stays_in_sync():
     )
     assert task["project_id"] is None
     assert tid not in mgr.data["projects"][project_id]["task_ids"]
+
+
+def test_reset_profile_resets_character_only():
+    """reset_profile resets level/XP/SPECIAL/skills/perks/caps/GOAT — but NOT tasks,
+    projects, karma or review state."""
+    from custom_components.gamified_gtd import gamification as g
+
+    mgr = _manager()
+    profile = _profile(mgr)
+    # simulate a developed character plus unrelated data that must survive
+    profile.update({
+        "level": 7, "xp": 5000, "caps": 123, "karma": 42, "review_streak": 3,
+        "perks": ["educated"], "tagged_skills": ["guns"], "goat": {"tags": ["guns"]},
+        "skills_allocated": {"guns": 10}, "skill_points_available": 4,
+        "special": {stat: 8 for stat in g.SPECIAL_STATS},
+    })
+    task = mgr._new_task("Keep me", {"list": "inbox"})
+    mgr.data["tasks"][task["id"]] = task
+    mgr.data["projects"]["p1"] = {
+        "id": "p1", "name": "Quest", "desired_outcome": "", "task_ids": [task["id"]],
+        "status": "active", "due": None, "created_at": "", "completed_at": None,
+    }
+
+    result = asyncio.run(mgr.reset_profile(_call("reset_profile", {"person": "person.x"})))
+
+    assert result["reset"] is True
+    assert result["character_creation_pending"] is True
+    assert result["user"] is None  # no user context on the call -> generic hint
+    # the pending hint fires IMMEDIATELY on reset (not only at the next HA start) and
+    # links into the integration settings (SPECIAL first, G.O.A.T. right after)
+    mgr.hass.services.async_call.assert_awaited()
+    args = mgr.hass.services.async_call.await_args.args
+    assert args[0] == "persistent_notification" and args[1] == "create"
+    assert f"/config/integrations/integration/{DOMAIN}" in args[2]["message"]
+    assert profile["goat_prompted"] is True  # notification was sent (flag consumed)
+    assert profile["level"] == 1 and profile["xp"] == 0 and profile["caps"] == 0
+    assert profile["perks"] == [] and profile["tagged_skills"] == [] and profile["goat"] is None
+    assert profile["skill_points_available"] == 0
+    assert all(v == 5 for v in profile["special"].values())  # back to FNV base 5
+    assert profile["skills_allocated"]["guns"] == 0
+    # untouched: karma, review, tasks, projects
+    assert profile["karma"] == 42 and profile["review_streak"] == 3
+    assert task["id"] in mgr.data["tasks"]
+    assert "p1" in mgr.data["projects"]
+    assert mgr.data["projects"]["p1"]["task_ids"] == [task["id"]]
+
+
+def test_reset_profile_notifies_triggering_user():
+    """reset_profile resolves the HA user from the service-call context and addresses
+    the persistent notification to them (persistent notifications are global in HA,
+    so the text personalizes the message)."""
+    from types import SimpleNamespace
+
+    mgr = _manager()
+    mgr.hass.auth.async_get_user = AsyncMock(
+        return_value=SimpleNamespace(name="Matt")
+    )
+    mgr.hass.states.async_all = MagicMock(
+        return_value=[
+            SimpleNamespace(entity_id="person.x", attributes={"user_id": "u1"}),
+            SimpleNamespace(entity_id="person.other", attributes={"user_id": "u2"}),
+        ]
+    )
+    call = ServiceCall(
+        MagicMock(), DOMAIN, "reset_profile", {"person": "person.x"},
+        context=Context(user_id="u1"),
+    )
+    result = asyncio.run(mgr.reset_profile(call))
+    assert result["user"] == "Matt"
+    args = mgr.hass.services.async_call.await_args.args
+    assert "reset by Matt" in args[2]["message"]
+
+
+def test_triggering_user_without_context_returns_none():
+    mgr = _manager()
+    user, person = asyncio.run(mgr._triggering_user(_call("reset_profile", {})))
+    assert user is None and person is None
+
+
+def test_reset_profile_also_clears_profiles_entry_in_options():
+    """reset_profile must drop the person's '_profiles' entry from the config entry
+    options — otherwise the options flow would still route to the manual tags step
+    (stale G.O.A.T./Tag! setup) and _ensure_profiles would re-apply the old values
+    on the next start after the options-triggered reload."""
+    from types import SimpleNamespace
+
+    mgr = _manager()
+    mgr._options = {"_profiles": {"person.x": {"goat": {"tags": ["guns"]},
+                                               "tagged_skills": ["guns"]}}}
+    entry = SimpleNamespace(
+        options={"persons": ["person.x"],
+                 "_profiles": {"person.x": {"goat": {"tags": ["guns"]},
+                                            "tagged_skills": ["guns"]}}}
+    )
+    mgr.hass.config_entries.async_get_entry.return_value = entry
+    mgr.hass.config_entries.async_update_entry = MagicMock()
+
+    asyncio.run(mgr.reset_profile(_call("reset_profile", {"person": "person.x"})))
+
+    mgr.hass.config_entries.async_update_entry.assert_called_once()
+    _, kwargs = mgr.hass.config_entries.async_update_entry.call_args
+    assert kwargs["options"]["_profiles"] == {}
+    assert kwargs["options"]["persons"] == ["person.x"]  # other options untouched
+    assert mgr._options["_profiles"] == {}  # in-memory view in sync
+
+
+def test_character_creation_pending_flag():
+    mgr = _manager()
+    profile = _profile(mgr)
+    assert mgr.profile_pending_character_creation(profile) is True
+    profile["tagged_skills"] = ["guns"]  # manual tags count as done
+    assert mgr.profile_pending_character_creation(profile) is False
+    profile["tagged_skills"] = []
+    profile["goat"] = {"tags": ["guns"]}  # GOAT result counts as done
+    assert mgr.profile_pending_character_creation(profile) is False
 
 
 def test_submit_goat_sets_tag_skills():

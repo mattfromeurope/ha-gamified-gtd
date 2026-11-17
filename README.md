@@ -41,13 +41,19 @@ screen is the Level-Up card:
 - In the options flow (**Configure → S.P.E.C.I.A.L.**) each attribute starts at **5** and
   you freely distribute **5 more points** (raise or lower, 1–10 each; the total must be
   exactly 40) — like character creation in FNV.
-- Instead of picking Tag! skills manually, take the **G.O.A.T.**: add the
-  `custom:gamified-gtd-goat` card to a dashboard once at setup, answer the 10 questions
-  and the result (3 Tag! skills + the vault "job") is applied via
-  `gamified_gtd.submit_goat` and stored on the profile (`sensor.<name>_level` attribute
-  `goat`). The slide images from Fallout 3 are **not shipped** (copyright) — drop them
-  into `www/gamified_gtd_icons/goat/slide_<n>.png` (links are in the questionnaire, see
-  DESIGN.md); without images the card shows a text fallback.
+- While character creation is pending, the **G.O.A.T. runs directly after the S.P.E.C.I.A.L.**
+  step in the same options flow (one question per form: question text + slide image in the
+  description, the 4 answers as radio buttons directly below; slide images appear when
+  present), followed by a result step showing the 3 Tag! skills + the vault job and asking
+  whether to adjust the Tag! skills manually — no dashboard card needed. The pending
+  notification at HA start
+  (and after `reset_profile`) links straight there. Alternatively, add the
+  `custom:gamified-gtd-goat` card to a dashboard once at setup and answer the 10 questions
+  there; the result is applied via `gamified_gtd.submit_goat` and stored on the profile
+  (`sensor.<name>_level` attribute `goat`). The slide images from Fallout 3 are **not
+  shipped** (copyright) — drop them into `www/gamified_gtd_icons/goat/slide_<n>.png`
+  (links are in the questionnaire, see DESIGN.md); without images the flow/card show a
+  text fallback.
 - Tasks can be moved between the four GTD lists at any time (`gamified_gtd.move_task`)
   and assigned to a quest in the task form (`project_id`) or via `add_to_project`.
 
@@ -99,8 +105,28 @@ The original FNV icons are copyrighted and **not shipped**. Drop your own files 
 `gamified_gtd.add_to_inbox`, `clarify`, `complete_task`, `update_task`, `move_task`,
 `skip_task`, `remove_task`, `create_project`, `add_to_project`, `complete_project`,
 `allocate_skill_points`, `choose_perk`, `start_review`, `complete_review`, `redeem_reward`,
-`submit_goat`, `get_state` — see `custom_components/gamified_gtd/services.yaml`.
+`submit_goat`, `reset_profile`, `get_state` — see `custom_components/gamified_gtd/services.yaml`.
 `update_task` also accepts `list` (move) and `project_id` (assign to quest).
+
+### Character creation & reset
+
+- **First setup / after reset:** every configured person whose character creation is still
+  pending (no G.O.A.T., no Tag! skills — visible as `character_creation_pending` on
+  `sensor.<name>_level`) gets a one-time persistent notification at HA start (HA has no
+  login event, so the startup notification is what the user sees right after starting HA).
+  The notification contains a link to the integration settings; its options flow sets
+  **S.P.E.C.I.A.L. first and the G.O.A.T. directly afterwards** — no dashboard card needed.
+- **`gamified_gtd.reset_profile`** (person) resets ONLY the FNV character — level, XP,
+  SPECIAL, allocated skills, Tag! skills, skill points, perks, caps, G.O.A.T. state (HP/skill
+  values derive automatically). **Tasks, quests, reviews, rewards and karma are not
+  touched.** The person's `_profiles` entry in the config entry options is dropped as well,
+  so the options flow routes to the G.O.A.T. again (not the manual Tag! picker) and a
+  restart does not re-apply the old SPECIAL/Tag! values. The user who triggers the reset
+  (service-call context) immediately gets the persistent notification addressed to them
+  (persistent notifications are global in HA, so the message text names the triggering
+  user); the response contains that user name.
+- The `custom:gamified-gtd-goat` card remains as an optional, equivalent way to take the
+  G.O.A.T. on a dashboard.
 
 ## Notifications
 
@@ -133,4 +159,4 @@ ready-to-read `speech` lines), `add_task`, `complete_task`, `clarify_task`, `get
 
 `gamified_gtd_task_completed`, `gamified_gtd_level_up`, `gamified_gtd_perk_available`,
 `gamified_gtd_perk_chosen`, `gamified_gtd_quest_completed`, `gamified_gtd_review_completed`,
-`gamified_gtd_reward_redeemed`, `gamified_gtd_goat_completed`.
+`gamified_gtd_reward_redeemed`, `gamified_gtd_goat_completed`, `gamified_gtd_profile_reset`.

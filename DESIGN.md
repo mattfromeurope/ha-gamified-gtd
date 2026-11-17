@@ -202,12 +202,28 @@ Sneak, Speech, Survival, Unarmed.
 | `start_review` / `complete_review` | weekly review |
 | `redeem_reward` | spend caps on a reward |
 | `submit_goat` | G.O.A.T. answers (10 indices) → sets the 3 Tag! skills; returns tags + job |
+| `reset_profile` | reset ONLY the FNV character of a person (level/XP/SPECIAL/skills/perks/caps/GOAT) so character creation can be redone — tasks, quests, reviews, rewards, karma untouched; fires `profile_reset`, re-arms the pending hint |
 | `get_state` | full profile as response (automations, voice, LLM) |
+
+Character creation is "pending" for a profile until it has a G.O.A.T. result or Tag! skills
+(`character_creation_pending` attribute on the level sensor). Pending profiles get a one-time
+persistent notification once at HA start, and reset_profile sends it immediately to the
+triggering user (resolved via the service-call context user_id → person entity; persistent
+notifications are global in HA, so the message text names the user). The notification links to
+`/config/integrations/integration/gamified_gtd`; its options flow runs S.P.E.C.I.A.L. first and
+the G.O.A.T. directly after (one question per form: question text + slide image in the
+markdown description, 4 answers as radio buttons via SelectSelectorMode.LIST), then a
+result step (Tag! skills + vault job) that optionally continues to the manual Tag! picker —
+HA has
+no login event and no URL that starts a flow directly, so
+"next login" is approximated by the HA-start notification and "click" by one click on
+"Configure" on the integration page.
 
 ## 6. Events
 
 `task_completed`, `level_up`, `perk_available`, `perk_chosen`, `quest_completed`,
-`review_completed`, `reward_redeemed`, `goat_completed` — each with the relevant data.
+`review_completed`, `reward_redeemed`, `goat_completed`, `profile_reset` — each with the
+relevant data.
 
 ## 7. Storage & options
 

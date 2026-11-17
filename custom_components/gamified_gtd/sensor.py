@@ -110,6 +110,10 @@ class LevelSensor(GTDProfileSensor):
             "review_checklist": self._manager.review_checklist_state(),
             "review_streak": self.profile.get("review_streak", 0),
             "goat": self.profile.get("goat"),  # G.O.A.T. result (null until taken)
+            # true while SPECIAL/G.O.A.T. still have to be (re-)done for this profile
+            "character_creation_pending": self._manager.profile_pending_character_creation(
+                self.profile
+            ),
         }
 
     def _days_since_review(self) -> int | None:
