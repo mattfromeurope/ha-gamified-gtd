@@ -39,16 +39,18 @@ const DOMAIN = "gamified_gtd";
 const STATIC = `/${DOMAIN}_static`;
 const ICONS = `${STATIC}/gamified_gtd_icons`;
 
-// The 7 S.P.E.C.I.A.L. attributes with their text-glyph fallback (used when no
-// custom icon file exists — see gamified_gtd_icons/README.md).
+// The 7 S.P.E.C.I.A.L. attributes: text-glyph fallback (used when no icon file exists)
+// plus the Pip-Boy-style description shown in the detail pane of the SPECIAL card.
+// Icons: user drop-in <stat>.png wins over the shipped Vault-Boy-style <stat>.svg
+// placeholder (see gamified_gtd_icons/README.md).
 const SPECIAL = [
-  { id: "strength", fb: "S" },
-  { id: "perception", fb: "P" },
-  { id: "endurance", fb: "E" },
-  { id: "charisma", fb: "C" },
-  { id: "intelligence", fb: "I" },
-  { id: "agility", fb: "A" },
-  { id: "luck", fb: "L" },
+  { id: "strength", fb: "S", desc: "Raw physical power. A high Strength lets you swing melee weapons harder and carry more gear across the Mojave." },
+  { id: "perception", fb: "P", desc: "How well you sense the world. Perception governs Energy Weapons, Explosives and Lockpick, and sharpens your compass." },
+  { id: "endurance", fb: "E", desc: "Health and toughness. Endurance raises your HP (95 + 20 per point, +5 per level) and governs Survival and Unarmed." },
+  { id: "charisma", fb: "C", desc: "Force of personality. Charisma governs Speech and Barter — and how people react to you." },
+  { id: "intelligence", fb: "I", desc: "Book smarts and technical skill. Intelligence governs Science, Medicine and Repair, and grants more skill points per level (10 + INT/2)." },
+  { id: "agility", fb: "A", desc: "Speed and coordination. Agility governs Guns and Sneak, and helps you line up shots in V.A.T.S." },
+  { id: "luck", fb: "L", desc: "Plain dumb luck. Luck adds ceil(Luck/2) to every skill and improves your critical chance and gambling odds." },
 ];
 
 // The 13 FNV skills with short text-glyph fallbacks.
@@ -118,16 +120,25 @@ function entitiesOf(hass, domain) {
   return Object.keys(hass.states).filter((e) => e.startsWith(domain + ".")).sort();
 }
 
-// Icon helper: tries <kind>/<id>.png from the user drop-in folder first; on load the
-// text fallback is removed, on error the <img> removes itself and the fallback stays.
+// Icon helper: user drop-in <kind>/<id>.png first (original FNV icons if the user
+// supplies them); on error the shipped placeholder <kind>/<id>.svg (our own
+// Vault-Boy-style drawings); if that also fails the <img> removes itself and the
+// text fallback stays. On successful load the text fallback is removed.
 function icon(kind, id, fallback, big) {
-  const src = `${ICONS}/${kind}/${id}.png`;
+  const png = `${ICONS}/${kind}/${id}.png`;
+  const svg = `${ICONS}/${kind}/${id}.svg`;
   return html`<span class="gicon ${big ? "big" : ""}"
     ><span class="gicon-fb">${fallback}</span
     ><img
-      src="${src}"
+      src="${png}"
       alt=""
-      @error=${(e) => e.target.remove()}
+      @error=${(e) => {
+        if (e.target.src.endsWith(".png")) {
+          e.target.src = svg; // try the shipped svg placeholder
+        } else {
+          e.target.remove(); // no image at all -> text fallback stays
+        }
+      }}
       @load=${(e) => {
         const fb = e.target.previousElementSibling;
         if (fb) fb.remove();
@@ -211,6 +222,22 @@ const cardCss = css`
   .seg { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
   .seg button.on { background: var(--primary-color); border-color: var(--primary-color); color: var(--text-primary-color, #fff); }
   .empty { color: var(--secondary-text-color); font-style: italic; }
+  /* SPECIAL card split layout (Pip-Boy STATS page): attribute list left,
+     selected attribute's icon + scrollable description right. */
+  .split { display: flex; gap: 16px; }
+  .alist { width: 220px; flex: none; border-right: 1px solid var(--divider-color); padding-right: 8px; }
+  .arow { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; cursor: pointer; }
+  .arow:hover, .arow.sel { background: var(--secondary-background-color, rgba(128, 128, 128, 0.15)); }
+  .arow .nm { flex: 1; font-size: 0.9em; text-transform: capitalize; }
+  .arow .val { font-weight: 600; }
+  .detail { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; }
+  .detail-icon { margin: 4px 0 8px; }
+  .detail-name { font-weight: 600; text-transform: capitalize; margin-bottom: 6px; }
+  .detail-desc {
+    width: 100%; max-height: 180px; overflow-y: auto;
+    color: var(--secondary-text-color); font-size: 0.85em; line-height: 1.5;
+    border-top: 1px solid var(--divider-color); padding-top: 8px;
+  }
   /* G.O.A.T. card */
   .goat-slide { display: flex; justify-content: center; margin: 8px 0; }
   .goat-q { font-size: 0.95em; line-height: 1.4; margin: 8px 0; }
@@ -306,8 +333,12 @@ defineCard("gamified-gtd-stats", GamifiedGTDStatsCard);
 /* ------------------------------------------------------------------ */
 
 class GamifiedGTDSPECIALCard extends LitElement {
+  // S.P.E.C.I.A.L. card in the Pip-Boy STATS-page layout: LEFT = list of the 7
+  // attributes with their values (hover or tap selects); RIGHT = big icon of the
+  // selected attribute on top + scrollable description below. Icons: user drop-in
+  // <stat>.png wins over the shipped Vault-Boy-style <stat>.svg placeholder.
   static get properties() {
-    return { hass: {}, config: {} };
+    return { hass: {}, config: {}, _sel: {} };
   }
   static getStubConfig() {
     return { person: "person.example", title: "S.P.E.C.I.A.L." };
@@ -315,23 +346,36 @@ class GamifiedGTDSPECIALCard extends LitElement {
   setConfig(config) {
     if (!config.person) throw new Error("person is required");
     this.config = config;
+    this._sel = "strength"; // default selection, like the Pip-Boy opens on Strength
   }
   getCardSize() {
-    return 4;
+    return 5;
   }
   render() {
     const special = this.hass.states[sensorId(this.config.person, "special")];
+    const sel = SPECIAL.find((s) => s.id === this._sel) || SPECIAL[0];
+    const selVal = special ? special.attributes[sel.id] : "?";
     return html`
       <ha-card>
         <div class="head"><span class="title">${this.config.title || "S.P.E.C.I.A.L."}</span>
           <span class="sub">${this.config.person}</span></div>
-        ${SPECIAL.map((s) => html`
-          <div class="srow">
-            ${icon("special", s.id, s.fb)}
-            <span class="nm">${s.id}</span>
-            <div class="bar"><div style="width:${(special ? special.attributes[s.id] : 5) * 10}%"></div></div>
-            <span class="val">${special ? special.attributes[s.id] : "?"}</span>
-          </div>`)}
+        <div class="split">
+          <div class="alist">
+            ${SPECIAL.map((s) => html`
+              <div class="arow ${s.id === sel.id ? "sel" : ""}"
+                @mouseenter=${() => { this._sel = s.id; }}
+                @click=${() => { this._sel = s.id; }}>
+                ${icon("special", s.id, s.fb)}
+                <span class="nm">${s.id}</span>
+                <span class="val">${special ? special.attributes[s.id] : "?"}</span>
+              </div>`)}
+          </div>
+          <div class="detail">
+            <div class="detail-icon">${icon("special", sel.id, sel.fb, true)}</div>
+            <div class="detail-name">${sel.id} — ${selVal}</div>
+            <div class="detail-desc">${sel.desc}</div>
+          </div>
+        </div>
       </ha-card>`;
   }
   static get styles() {

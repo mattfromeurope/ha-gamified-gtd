@@ -6,6 +6,7 @@ missing:
 ```
 gamified_gtd_icons/
   special/<stat>.png      strength, perception, endurance, charisma, intelligence, agility, luck
+  special/<stat>.svg      SHIPPED placeholder (our own Vault-Boy-style drawing) — used when no .png exists
   skill/<skill>.png       barter, energy_weapons, explosives, guns, lockpick, medicine,
                           melee_weapons, repair, science, sneak, speech, survival, unarmed
   perk/<perk_id>.png      e.g. swift_learner.png, intense_training.png, educated.png
@@ -15,6 +16,9 @@ gamified_gtd_icons/
                           sources: the Fallout Wiki links in DESIGN.md / the GOAT
                           questionnaire (FO3_GOAT_slide_<n>.jpg)
 ```
+
+Lookup order per icon: `<id>.png` (your drop-in) → `<id>.svg` (shipped placeholder,
+only for `special/`) → text glyph.
 
 Served at `/gamified_gtd_static/gamified_gtd_icons/...`.
 

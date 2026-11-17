@@ -74,6 +74,36 @@ def test_cards_are_theme_aware_not_pipboy_green():
         assert var in src, f"theme variable {var} missing"
 
 
+def test_special_card_uses_pipboy_split_layout():
+    """SPECIAL card: attribute list left, selected attribute's icon + scrollable
+    description right (Pip-Boy STATS layout)."""
+    src = CARDS.read_text(encoding="utf-8")
+    assert 'defineCard("gamified-gtd-special"' in src
+    for marker in ('class="split"', 'class="alist"', 'class="arow', 'class="detail"',
+                   "detail-icon", "detail-desc", "@mouseenter"):
+        assert marker in src, f"split-layout marker {marker} missing"
+    # every SPECIAL attribute carries a description for the detail pane
+    for stat in ("strength", "perception", "endurance", "charisma", "intelligence", "agility", "luck"):
+        assert f'id: "{stat}"' in src and "desc:" in src
+
+
+def test_icon_helper_png_then_svg_then_text():
+    """Icon lookup order: user drop-in .png -> shipped .svg placeholder -> text glyph."""
+    src = CARDS.read_text(encoding="utf-8")
+    assert '.png`' in src and '.svg`' in src
+    assert 'e.target.src = svg' in src
+
+
+def test_special_placeholder_svgs_shipped():
+    """Original Vault-Boy-style placeholder SVGs for all 7 SPECIAL attributes
+    (user .png drop-ins still take precedence)."""
+    icons = WWW / "gamified_gtd_icons" / "special"
+    for stat in ("strength", "perception", "endurance", "charisma", "intelligence", "agility", "luck"):
+        f = icons / f"{stat}.svg"
+        assert f.exists(), f"missing placeholder {f}"
+        assert "<svg" in f.read_text(encoding="utf-8")
+
+
 def test_vendored_lit_bundle_exists_and_exports_lit_api():
     assert LIT.exists(), "vendored lit bundle gamified-gtd-lit.js is missing"
     lit = LIT.read_text(encoding="utf-8")
