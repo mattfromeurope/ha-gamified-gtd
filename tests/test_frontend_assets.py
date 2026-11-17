@@ -64,7 +64,8 @@ def test_cards_read_todo_items_attribute():
     # completed pseudo-list, sorting, per-card detail visibility, GUI config editor
     for marker in [
         "mdi:trash-can-outline", "mdi:pencil-outline", "mdi:help-circle-outline",
-        "mdi:playlist-check", "mdi:chevron-down",
+        "mdi:playlist-check", "mdi:chevron-down", "mdi:folder-move-outline",
+        "_moveUid", "movemenu", "crossList",
         "_clarifyAllStart", '"completed"', "_isOverdue", ".badge.overdue",
         "td-done", "TASK_DETAIL_FIELDS", "getConfigElement",
         'defineCard("gamified-gtd-tasks-editor"', "config-changed",

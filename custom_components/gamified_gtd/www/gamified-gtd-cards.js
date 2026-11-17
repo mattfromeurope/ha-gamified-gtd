@@ -248,11 +248,22 @@ const cardCss = css`
     background: var(--secondary-background-color, rgba(128, 128, 128, 0.15));
     color: var(--secondary-text-color); border-radius: 8px; padding: 1px 7px; font-size: 0.72em;
   }
-  select.move, ha-dialog input, ha-dialog select, ha-dialog textarea {
+  ha-dialog input, ha-dialog select, ha-dialog textarea {
     font: inherit; background: var(--secondary-background-color, var(--primary-background-color));
     color: var(--primary-text-color); border: 1px solid var(--divider-color); border-radius: 8px; padding: 6px;
   }
-  select.move { font-size: 0.75em; padding: 2px 4px; }
+  /* Move-to-list: icon button opens a small popover menu with the 4 GTD lists. */
+  .movewrap { position: relative; display: inline-flex; }
+  .movemenu {
+    position: absolute; right: 0; top: calc(100% + 4px); z-index: 20;
+    display: flex; flex-direction: column; min-width: 150px;
+    background: var(--card-background-color, var(--primary-background-color));
+    border: 1px solid var(--divider-color); border-radius: 8px; padding: 4px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  }
+  .movemenu .mopt { border: none; border-radius: 6px; background: transparent; text-align: left; padding: 6px 10px; white-space: nowrap; font-size: 0.85em; }
+  .movemenu .mopt:hover { background: var(--secondary-background-color, rgba(128, 128, 128, 0.15)); }
+  .movemenu .mopt.cur { color: var(--primary-color); font-weight: 600; }
   .checklist { margin: 6px 0; }
   .checklist .cl-ok { color: var(--success-color, #4caf50); }
   .checklist .cl-no { color: var(--error-color, #db4437); }
@@ -879,7 +890,7 @@ class GamifiedGTDTasksCard extends LitElement {
   // ("created"/"due"/"priority"/"title"), details (visible row badges) — editable in
   // the GUI via getConfigElement().
   static get properties() {
-    return { hass: {}, config: {}, _dlg: {}, _task: {}, _open: {}, _clarifyAll: {} };
+    return { hass: {}, config: {}, _dlg: {}, _task: {}, _open: {}, _clarifyAll: {}, _moveUid: {} };
   }
   static getStubConfig() {
     return { title: "TASKS", list: "all", assigned: "all" };
@@ -970,12 +981,15 @@ class GamifiedGTDTasksCard extends LitElement {
     return out;
   }
   // Expandable details pane (shown when the row is clicked): everything not on the row.
+  // The LIST row is only shown when the card itself spans all lists ("all"/"completed") —
+  // otherwise every row is in the same list anyway and it would be noise.
   _detailsPane(i) {
     const m = i.meta;
     const loc = m.location;
+    const crossList = this.config.list === "all" || this.config.list === "completed";
     return html`<div class="tdetails">
       ${i.description ? html`<div class="t-notes">${i.description}</div>` : ""}
-      <div class="row"><span class="lbl">LIST</span><span class="val">${LISTS[i.list] ? LISTS[i.list].label : i.list}</span></div>
+      ${crossList ? html`<div class="row"><span class="lbl">LIST</span><span class="val">${LISTS[i.list] ? LISTS[i.list].label : i.list}</span></div>` : ""}
       ${i.due ? html`<div class="row"><span class="lbl">DUE</span><span class="val ${this._isOverdue(i) ? "overdue-txt" : ""}">${i.due}${m.due_time ? " " + m.due_time : ""}${this._isOverdue(i) ? " (overdue)" : ""}</span></div>` : ""}
       ${m.priority ? html`<div class="row"><span class="lbl">PRIORITY</span><span class="val">P${m.priority}</span></div>` : ""}
       ${m.assigned_to ? html`<div class="row"><span class="lbl">ASSIGNED</span><span class="val">${m.assigned_to}</span></div>` : ""}
@@ -1043,10 +1057,12 @@ class GamifiedGTDTasksCard extends LitElement {
               <ha-icon class="chev" icon=${open ? "mdi:chevron-up" : "mdi:chevron-down"}></ha-icon>
               ${i.list === "inbox"
                 ? html`<button class="ibtn" title="Clarify" @click=${(e) => { e.stopPropagation(); this._task = i; this._dlg = "clarify"; this._clarifyAll = false; }}><ha-icon icon="mdi:help-circle-outline"></ha-icon></button>`
-                : html`<select class="move" title="Move to another list" @click=${(e) => e.stopPropagation()}
-                    @change=${(e) => svc(this.hass, "move_task", { task_id: i.uid, list: e.target.value })}>
-                    ${Object.entries(LISTS).map(([k, l]) => html`<option value=${k} ?selected=${i.list === k}>${l.label}</option>`)}
-                  </select>`}
+                : html`<span class="movewrap">
+                    <button class="ibtn" title="Move to another list" @click=${(e) => { e.stopPropagation(); this._moveUid = this._moveUid === i.uid ? null : i.uid; }}><ha-icon icon="mdi:folder-move-outline"></ha-icon></button>
+                    ${this._moveUid === i.uid ? html`<span class="movemenu" @click=${(e) => e.stopPropagation()}>
+                      ${Object.entries(LISTS).map(([k, l]) => html`<button class="mopt ${i.list === k ? "cur" : ""}" @click=${() => { this._moveUid = null; svc(this.hass, "move_task", { task_id: i.uid, list: k }); }}>${l.label}</button>`)}
+                    </span>` : ""}
+                  </span>`}
               <button class="ibtn" title="Edit" @click=${(e) => { e.stopPropagation(); this._task = i; this._dlg = "edit"; }}><ha-icon icon="mdi:pencil-outline"></ha-icon></button>
               <button class="ibtn" title="Delete" @click=${(e) => { e.stopPropagation(); svc(this.hass, "remove_task", { task_id: i.uid }); }}><ha-icon icon="mdi:trash-can-outline"></ha-icon></button>
             </div>
