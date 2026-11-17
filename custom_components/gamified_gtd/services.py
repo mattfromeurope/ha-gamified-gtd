@@ -29,6 +29,7 @@ from .const import (
     SERVICE_MOVE_TASK,
     SERVICE_REDEEM_REWARD,
     SERVICE_REMOVE_TASK,
+    SERVICE_RESET_PROFILE,
     SERVICE_SKIP_TASK,
     SERVICE_START_REVIEW,
     SERVICE_SUBMIT_GOAT,
@@ -284,6 +285,17 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         supports_response=SupportsResponse.ONLY,
     )
 
+    async def handle_reset(call: ServiceCall) -> dict:
+        return await get_manager(hass).reset_profile(call)
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_RESET_PROFILE,
+        handle_reset,
+        schema=PERSON_ONLY_SCHEMA,
+        supports_response=SupportsResponse.ONLY,
+    )
+
 
 async def async_unload_services(hass: HomeAssistant) -> None:
     """Remove all gamified_gtd services (when the last config entry is unloaded)."""
@@ -305,6 +317,7 @@ async def async_unload_services(hass: HomeAssistant) -> None:
         SERVICE_GET_STATE,
         SERVICE_MOVE_TASK,
         SERVICE_SUBMIT_GOAT,
+        SERVICE_RESET_PROFILE,
     ):
         if hass.services.has_service(DOMAIN, service):
             hass.services.async_remove(DOMAIN, service)

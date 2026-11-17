@@ -474,3 +474,19 @@ submit_goat:
       example: "0,2,1,0,3,0,1,2,3,0"
       selector:
         text:
+
+reset_profile:
+  name: Reset profile (character creation)
+  description: Reset ONLY the FNV character of a person (level, XP, SPECIAL, skills, perks, caps, G.O.A.T. state) so character creation can be redone. Tasks, quests, reviews, rewards and karma are NOT touched. Fires gamified_gtd_profile_reset and re-arms the character-creation hint (SPECIAL in the options + G.O.A.T. card).
+  response:
+    person:
+      description: person entity id
+    reset:
+      description: always true
+    character_creation_pending:
+      description: whether SPECIAL + G.O.A.T. now have to be (re-)done
+  fields:
+    person:
+      name: Person
+      selector:
+        text:

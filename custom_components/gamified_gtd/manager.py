@@ -45,6 +45,7 @@ from .const import (
     EVENT_DATA_UPDATED,
     EVENT_GOAT_COMPLETED,
     EVENT_LEVEL_UP,
+    EVENT_PROFILE_RESET,
     EVENT_PERK_AVAILABLE,
     EVENT_PERK_CHOSEN,
     EVENT_QUEST_COMPLETED,
@@ -604,13 +605,21 @@ class GTDManager:
     # G.O.A.T. (character creation test -> Tag! skills)
     # ------------------------------------------------------------------
 
-    async def async_goat_pending_hint(self) -> None:
-        """One-time persistent notification per profile that has no Tag! skills yet,
-        pointing to the G.O.A.T. card (the test is meant to be taken once at setup).
-        The `goat_prompted` flag makes sure it fires only once per profile."""
+    def profile_pending_character_creation(self, profile: dict[str, Any]) -> bool:
+        """True while character creation is still open for this profile: neither a
+        G.O.A.T. result nor manually chosen Tag! skills exist yet (SPECIAL is set in
+        the options flow, the G.O.A.T. via the gamified-gtd-goat card)."""
+        return not profile.get("goat") and not profile.get("tagged_skills")
+
+    async def async_character_creation_hint(self) -> None:
+        """One-time persistent notification per profile whose character creation is
+        still pending — pointing to the SPECIAL options step and the G.O.A.T. card.
+        Runs at setup/HA start and periodically (HA has no login event on the bus, so
+        this is how a user is reached right after logging in). The `goat_prompted`
+        flag makes it fire only once per profile; reset_profile re-arms it."""
         changed = False
         for person, profile in self.data["profiles"].items():
-            if profile.get("tagged_skills") or profile.get("goat") or profile.get("goat_prompted"):
+            if not self.profile_pending_character_creation(profile) or profile.get("goat_prompted"):
                 continue
             profile["goat_prompted"] = True
             changed = True
@@ -618,11 +627,12 @@ class GTDManager:
                 "persistent_notification",
                 "create",
                 {
-                    "title": "Gamified GTD — G.O.A.T.",
+                    "title": "Gamified GTD — character creation pending",
                     "message": (
-                        f"{person}: take the G.O.A.T. to set your 3 Tag! skills. Add the "
-                        "'Gamified GTD — G.O.A.T.' card (custom:gamified-gtd-goat) to any "
-                        f"dashboard with person: {person} and start the test."
+                        f"{person}: set your S.P.E.C.I.A.L. attributes (integration options "
+                        f"→ S.P.E.C.I.A.L., 5 base + 5 free points) and take the G.O.A.T. to "
+                        "determine your 3 Tag! skills — add the 'Gamified GTD — G.O.A.T.' card "
+                        f"(custom:gamified-gtd-goat, person: {person}) to any dashboard."
                     ),
                     "notification_id": f"{DOMAIN}_goat_{person}",
                 },
@@ -630,6 +640,29 @@ class GTDManager:
             )
         if changed:
             await self._save()
+
+    async def reset_profile(self, call: ServiceCall) -> dict[str, Any]:
+        """Service `reset_profile`: reset character creation for a person and let them
+        start over. ONLY the FNV character is reset — level, XP, SPECIAL, allocated
+        skills, Tag! skills, skill points, perks, pending perk choice, caps and the
+        G.O.A.T. state (HP/skill values derive from these and update automatically).
+        Tasks, quests/projects, reviews, rewards and karma are NOT touched.
+        Afterwards the pending hint fires again so SPECIAL + G.O.A.T. are re-done."""
+        profile = self._profile_from_call(call)
+        fresh = self._new_profile(profile["person"])
+        # keep identity + everything that is not character creation
+        keep = ("person", "name", "created_at", "karma", "review_streak", "last_review_completed")
+        for key, value in fresh.items():
+            if key not in keep:
+                profile[key] = value
+        profile["goat_prompted"] = False  # re-arm the one-time character-creation hint
+        await self._save()
+        self.hass.bus.async_fire(EVENT_PROFILE_RESET, {"person": profile["person"]})
+        return {
+            "person": profile["person"],
+            "reset": True,
+            "character_creation_pending": self.profile_pending_character_creation(profile),
+        }
 
     async def submit_goat(self, call: ServiceCall) -> dict[str, Any]:
         """Submit the G.O.A.T. answers (one 0-based answer index per question).

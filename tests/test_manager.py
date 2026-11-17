@@ -102,6 +102,54 @@ def test_update_task_project_link_stays_in_sync():
     assert tid not in mgr.data["projects"][project_id]["task_ids"]
 
 
+def test_reset_profile_resets_character_only():
+    """reset_profile resets level/XP/SPECIAL/skills/perks/caps/GOAT — but NOT tasks,
+    projects, karma or review state."""
+    from custom_components.gamified_gtd import gamification as g
+
+    mgr = _manager()
+    profile = _profile(mgr)
+    # simulate a developed character plus unrelated data that must survive
+    profile.update({
+        "level": 7, "xp": 5000, "caps": 123, "karma": 42, "review_streak": 3,
+        "perks": ["educated"], "tagged_skills": ["guns"], "goat": {"tags": ["guns"]},
+        "skills_allocated": {"guns": 10}, "skill_points_available": 4,
+        "special": {stat: 8 for stat in g.SPECIAL_STATS},
+    })
+    task = mgr._new_task("Keep me", {"list": "inbox"})
+    mgr.data["tasks"][task["id"]] = task
+    mgr.data["projects"]["p1"] = {
+        "id": "p1", "name": "Quest", "desired_outcome": "", "task_ids": [task["id"]],
+        "status": "active", "due": None, "created_at": "", "completed_at": None,
+    }
+
+    result = asyncio.run(mgr.reset_profile(_call("reset_profile", {"person": "person.x"})))
+
+    assert result["reset"] is True
+    assert result["character_creation_pending"] is True
+    assert profile["level"] == 1 and profile["xp"] == 0 and profile["caps"] == 0
+    assert profile["perks"] == [] and profile["tagged_skills"] == [] and profile["goat"] is None
+    assert profile["skill_points_available"] == 0
+    assert all(v == 5 for v in profile["special"].values())  # back to FNV base 5
+    assert profile["skills_allocated"]["guns"] == 0
+    # untouched: karma, review, tasks, projects
+    assert profile["karma"] == 42 and profile["review_streak"] == 3
+    assert task["id"] in mgr.data["tasks"]
+    assert "p1" in mgr.data["projects"]
+    assert mgr.data["projects"]["p1"]["task_ids"] == [task["id"]]
+
+
+def test_character_creation_pending_flag():
+    mgr = _manager()
+    profile = _profile(mgr)
+    assert mgr.profile_pending_character_creation(profile) is True
+    profile["tagged_skills"] = ["guns"]  # manual tags count as done
+    assert mgr.profile_pending_character_creation(profile) is False
+    profile["tagged_skills"] = []
+    profile["goat"] = {"tags": ["guns"]}  # GOAT result counts as done
+    assert mgr.profile_pending_character_creation(profile) is False
+
+
 def test_submit_goat_sets_tag_skills():
     mgr = _manager()
     call = _call("submit_goat", {"person": "person.x", "answers": [0] * 10})

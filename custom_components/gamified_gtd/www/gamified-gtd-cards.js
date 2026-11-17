@@ -656,9 +656,13 @@ class GamifiedGTDGoatCard extends LitElement {
       </ha-card>`;
   }
   _renderIntro(stored) {
+    const level = this.hass.states[sensorId(this.config.person, "level")];
+    const pending = !stored && level && level.attributes.character_creation_pending;
     return html`
       <div class="goat-q">GENERALIZED OCCUPATIONAL APTITUDE TEST — Vault 101, age 16.
         Answer 10 questions; the test determines your 3 Tag! skills (+15 each).</div>
+      ${pending ? html`<div class="goat-job"><div class="j-name">CHARACTER CREATION PENDING</div>
+        <div class="j-comment">First set your S.P.E.C.I.A.L. attributes (integration options → S.P.E.C.I.A.L.), then take the G.O.A.T. here.</div></div>` : ""}
       ${stored ? html`
         <div class="goat-job">
           <div class="j-name">ALREADY COMPLETED: ${stored.job.name}</div>

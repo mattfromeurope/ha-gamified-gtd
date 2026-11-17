@@ -99,8 +99,20 @@ The original FNV icons are copyrighted and **not shipped**. Drop your own files 
 `gamified_gtd.add_to_inbox`, `clarify`, `complete_task`, `update_task`, `move_task`,
 `skip_task`, `remove_task`, `create_project`, `add_to_project`, `complete_project`,
 `allocate_skill_points`, `choose_perk`, `start_review`, `complete_review`, `redeem_reward`,
-`submit_goat`, `get_state` — see `custom_components/gamified_gtd/services.yaml`.
+`submit_goat`, `reset_profile`, `get_state` — see `custom_components/gamified_gtd/services.yaml`.
 `update_task` also accepts `list` (move) and `project_id` (assign to quest).
+
+### Character creation & reset
+
+- **First setup / after reset:** every configured person whose character creation is still
+  pending (no G.O.A.T., no Tag! skills — visible as `character_creation_pending` on
+  `sensor.<name>_level`) gets a one-time persistent notification pointing to the SPECIAL
+  options step and the G.O.A.T. card. The check runs at HA start and every 15 min (HA has
+  no login event, so the notification is what the user sees right after logging in).
+- **`gamified_gtd.reset_profile`** (person) resets ONLY the FNV character — level, XP,
+  SPECIAL, allocated skills, Tag! skills, skill points, perks, caps, G.O.A.T. state (HP/skill
+  values derive automatically). **Tasks, quests, reviews, rewards and karma are not
+  touched.** Afterwards the pending hint fires again, so SPECIAL + G.O.A.T. are redone.
 
 ## Notifications
 
@@ -133,4 +145,4 @@ ready-to-read `speech` lines), `add_task`, `complete_task`, `clarify_task`, `get
 
 `gamified_gtd_task_completed`, `gamified_gtd_level_up`, `gamified_gtd_perk_available`,
 `gamified_gtd_perk_chosen`, `gamified_gtd_quest_completed`, `gamified_gtd_review_completed`,
-`gamified_gtd_reward_redeemed`, `gamified_gtd_goat_completed`.
+`gamified_gtd_reward_redeemed`, `gamified_gtd_goat_completed`, `gamified_gtd_profile_reset`.

@@ -99,6 +99,7 @@ SERVICE_REDEEM_REWARD = "redeem_reward"
 SERVICE_GET_STATE = "get_state"
 SERVICE_MOVE_TASK = "move_task"
 SERVICE_SUBMIT_GOAT = "submit_goat"
+SERVICE_RESET_PROFILE = "reset_profile"
 
 # Shared payload keys
 SERVICE_PERSON = "person"
@@ -125,6 +126,7 @@ EVENT_REWARD_REDEEMED = f"{DOMAIN}_reward_redeemed"
 EVENT_REMINDER_SENT = f"{DOMAIN}_reminder_sent"
 EVENT_SUMMARY_SENT = f"{DOMAIN}_summary_sent"
 EVENT_GOAT_COMPLETED = f"{DOMAIN}_goat_completed"
+EVENT_PROFILE_RESET = f"{DOMAIN}_profile_reset"
 
 # ---------------------------------------------------------------------------
 # Notification options
