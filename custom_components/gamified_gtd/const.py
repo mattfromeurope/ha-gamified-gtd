@@ -12,6 +12,9 @@ DOMAIN = "gamified_gtd"
 # Storage: one versioned JSON file in .storage (single source of truth, HA-backed-up).
 STORAGE_KEY = DOMAIN
 STORAGE_VERSION = 1
+# Debounce for the debounced store write (seconds) — see GTDManager._save. The UI
+# refresh event is NOT delayed by this; only the disk write is.
+STORAGE_WRITE_DELAY = 1.0
 
 # ---------------------------------------------------------------------------
 # GTD lists

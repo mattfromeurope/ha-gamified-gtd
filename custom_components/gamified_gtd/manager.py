@@ -62,6 +62,7 @@ from .const import (
     REVIEW_OVERDUE_KARMA_PER_WEEK,
     STORAGE_KEY,
     STORAGE_VERSION,
+    STORAGE_WRITE_DELAY,
     TASK_DONE,
     TASK_OPEN,
     TODO_LISTS,
@@ -211,9 +212,18 @@ class GTDManager:
         }
 
     async def _save(self) -> None:
-        """Persist the data and notify all listeners (entities, scheduler) via event."""
-        await self._store.async_save(self.data)
+        """Notify all listeners (entities, scheduler) via event and persist the data.
+
+        The refresh event fires IMMEDIATELY: entities/sensors/cards read the in-memory
+        self.data, so the UI updates within milliseconds of the change. The disk write
+        is debounced via Store.async_delay_save and deliberately NOT awaited — awaiting
+        Store.async_save here made every change visible only after the full store JSON
+        had been written to disk (noticeable on slow disks / large stores). Store
+        flushes pending delayed writes on HA shutdown (final-write listener), so nothing
+        is lost on a clean stop.
+        """
         self.hass.bus.async_fire(EVENT_DATA_UPDATED, {"entry_id": self.entry_id})
+        self._store.async_delay_save(lambda: self.data, delay=STORAGE_WRITE_DELAY)
 
     # ------------------------------------------------------------------
     # Profiles

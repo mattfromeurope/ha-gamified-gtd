@@ -260,3 +260,18 @@ def test_submit_goat_sets_tag_skills():
     call2 = _call("submit_goat", {"person": "person.x", "answers": "0,0,0,0,0,0,0,0,0,0"})
     result2 = asyncio.run(mgr.submit_goat(call2))
     assert result2["tags"] == result["tags"]
+
+
+def test_save_fires_refresh_event_immediately_and_debounces_disk_write():
+    """Regression (UI lag): _save used to `await Store.async_save` (full store JSON to
+    disk) BEFORE firing data_updated, so changes only became visible after the disk
+    write. Now the event fires first and the write is debounced (async_delay_save)."""
+    from custom_components.gamified_gtd.const import EVENT_DATA_UPDATED
+
+    mgr = _manager()
+    mgr._store = MagicMock()
+    asyncio.run(mgr._save())
+    # refresh event fired, disk write debounced not awaited
+    mgr.hass.bus.async_fire.assert_called_once_with(EVENT_DATA_UPDATED, {"entry_id": "e1"})
+    mgr._store.async_delay_save.assert_called_once()
+    mgr._store.async_save.assert_not_called()
