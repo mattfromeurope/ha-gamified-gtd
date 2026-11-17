@@ -207,8 +207,8 @@ Sneak, Speech, Survival, Unarmed.
 
 Character creation is "pending" for a profile until it has a G.O.A.T. result or Tag! skills
 (`character_creation_pending` attribute on the level sensor). Pending profiles get a one-time
-persistent notification (SPECIAL options + G.O.A.T. card) at HA start and every 15 min — HA has
-no login event, so the notification is what a user sees right after logging in.
+persistent notification (SPECIAL options + G.O.A.T. card) once at HA start — HA has
+no login event, so the startup notification is what the user sees right after starting HA.
 
 ## 6. Events
 

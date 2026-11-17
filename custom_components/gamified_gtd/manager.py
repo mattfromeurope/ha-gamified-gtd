@@ -614,9 +614,9 @@ class GTDManager:
     async def async_character_creation_hint(self) -> None:
         """One-time persistent notification per profile whose character creation is
         still pending — pointing to the SPECIAL options step and the G.O.A.T. card.
-        Runs at setup/HA start and periodically (HA has no login event on the bus, so
-        this is how a user is reached right after logging in). The `goat_prompted`
-        flag makes it fire only once per profile; reset_profile re-arms it."""
+        Runs once at HA start (HA has no login event on the bus, so this is how a user
+        is reached after (re)starting Home Assistant). The `goat_prompted` flag makes
+        it fire only once per profile; reset_profile re-arms it for the next start."""
         changed = False
         for person, profile in self.data["profiles"].items():
             if not self.profile_pending_character_creation(profile) or profile.get("goat_prompted"):

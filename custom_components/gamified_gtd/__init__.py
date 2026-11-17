@@ -12,12 +12,10 @@ from __future__ import annotations
 import json
 import logging
 import os
-from datetime import timedelta
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.event import async_track_time_interval
 
 from .const import DOMAIN
 from .manager import GTDManager, get_manager  # noqa: F401  (re-exported)
@@ -113,23 +111,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await manager.async_load()
 
     # One-time hint per profile with pending character creation (SPECIAL + G.O.A.T.).
+    # Fired once at HA startup (HA has no login event on the bus, so "next login" is
+    # approximated by the HA start); reset_profile re-arms the hint for the next start.
     try:
         await manager.async_character_creation_hint()
     except Exception as err:  # noqa: BLE001 - a missing hint must never break setup
         _LOGGER.warning("Could not send the character-creation hint: %s", err)
-
-    # HA has no login event on the bus, so the pending check also runs periodically:
-    # the persistent notification is what a user sees right after logging in when
-    # their profile still needs SPECIAL + G.O.A.T. (re-armed by reset_profile).
-    async def _periodic_hint(now) -> None:
-        try:
-            await manager.async_character_creation_hint()
-        except Exception as err:  # noqa: BLE001
-            _LOGGER.warning("Character-creation hint check failed: %s", err)
-
-    entry.async_on_unload(
-        async_track_time_interval(hass, _periodic_hint, timedelta(minutes=15))
-    )
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = manager
     # Keep a flat list of managers — services use the first one for now.

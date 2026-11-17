@@ -107,8 +107,8 @@ The original FNV icons are copyrighted and **not shipped**. Drop your own files 
 - **First setup / after reset:** every configured person whose character creation is still
   pending (no G.O.A.T., no Tag! skills — visible as `character_creation_pending` on
   `sensor.<name>_level`) gets a one-time persistent notification pointing to the SPECIAL
-  options step and the G.O.A.T. card. The check runs at HA start and every 15 min (HA has
-  no login event, so the notification is what the user sees right after logging in).
+  options step and the G.O.A.T. card. The check runs once at HA start (HA has
+  no login event, so the startup notification is what the user sees right after starting HA).
 - **`gamified_gtd.reset_profile`** (person) resets ONLY the FNV character — level, XP,
   SPECIAL, allocated skills, Tag! skills, skill points, perks, caps, G.O.A.T. state (HP/skill
   values derive automatically). **Tasks, quests, reviews, rewards and karma are not
