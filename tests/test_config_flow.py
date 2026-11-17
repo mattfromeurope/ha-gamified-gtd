@@ -41,27 +41,48 @@ def _flow(profiles: dict | None = None, person: str = "person.x") -> GamifiedGDT
     return flow
 
 
-def test_goat_step_shows_10_questions_in_description_placeholder():
-    """The form has one dropdown per question; the question markdown (incl. slide
-    images when the drop-in files exist) goes into the {questions} placeholder, because
-    async_show_form has no description kwarg — descriptions come from strings.json."""
+def test_goat_step_shows_one_question_with_radio_answers():
+    """One question per form: the question markdown (incl. slide image when the drop-in
+    file exists) goes into the {question} placeholder — async_show_form has no
+    description kwarg, descriptions come from strings.json. The single 'answer' field
+    uses SelectSelectorMode.LIST, which the frontend renders as radio buttons."""
     flow = _flow()
     flow._special = {s: 5 for s in SPECIAL_STATS}
     result = asyncio.run(flow.async_step_goat(None))
     assert result["type"] == "form" and result["step_id"] == "goat"
-    assert len(result["data_schema"].schema) == len(QUESTIONS)
-    questions_md = result["description_placeholders"]["questions"]
-    for q in QUESTIONS:
-        assert f"**{q.n}.**" in questions_md
+    assert not result.get("last_step")
+    assert len(result["data_schema"].schema) == 1  # only the current question
+    question_md = result["description_placeholders"]["question"]
+    assert "Question 1 of 10" in question_md and QUESTIONS[0].text in question_md
     # no slide drop-ins in the repo -> no broken image markdown
-    assert "![G.O.A.T. slide" not in questions_md
+    assert "![G.O.A.T. slide" not in question_md
+    # serialized schema: select selector in LIST mode (radio buttons) with 4 options
+    (field,) = voluptuous_serialize.convert(
+        result["data_schema"], custom_serializer=cv.custom_serializer
+    )
+    assert field["name"] == "answer"
+    sel = field["selector"]["select"]
+    assert sel["mode"] == "list" and len(sel["options"]) == 4
 
 
-def test_goat_step_submit_stores_special_goat_and_tags():
+def test_goat_step_walks_all_10_questions_then_stores_result():
+    """Each submit stores one answer and shows the next question; after the 10th the
+    flow finishes and SPECIAL + G.O.A.T. result + Tag! skills are stored on the profile."""
     flow = _flow()
     flow._special = {s: 5 for s in SPECIAL_STATS}
-    user_input = {f"q{q.n}": "0" for q in QUESTIONS}
-    result = asyncio.run(flow.async_step_goat(user_input))
+
+    async def run():
+        r = await flow.async_step_goat(None)  # first question form
+        for i in range(len(QUESTIONS)):
+            assert r["type"] == "form" and r["step_id"] == "goat"
+            # last question shows "Submit" instead of "Next"
+            assert r["last_step"] == (i == len(QUESTIONS) - 1)
+            assert f"Question {i + 1} of 10" in r["description_placeholders"]["question"]
+            _serialize(r)
+            r = await flow.async_step_goat({"answer": "0"})
+        return r
+
+    result = asyncio.run(run())
     assert result["type"] == "create_entry"
     setup = result["data"]["_profiles"]["person.x"]
     assert setup["special"] == flow._special
@@ -128,7 +149,10 @@ def test_all_step_schemas_serialize_for_frontend():
         r = await flow.async_step_person({"person": "person.x"})
         _serialize(r)  # special
         r = await flow.async_step_special(_valid_special_input())
-        _serialize(r)  # goat (character creation pending)
+        _serialize(r)  # goat, question 1 (character creation pending)
+        for _ in range(len(QUESTIONS) - 1):
+            r = await flow.async_step_goat({"answer": "0"})
+            _serialize(r)  # goat, next question
         # invalid SPECIAL (35 != 40) re-shows the form with a base error
         r = await flow.async_step_special({s: "5" for s in SPECIAL_STATS})
         assert r["type"] == "form" and r["step_id"] == "special" and r["errors"]["base"]

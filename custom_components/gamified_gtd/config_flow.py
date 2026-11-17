@@ -5,9 +5,9 @@ contexts); one entry per person selection (unique id = sorted person list).
 
 Options flow steps: init (globals) -> notify (notify service per person, daily summary,
 HA notification, unassigned-to-all) -> person (pick one) -> special (7 SPECIAL values)
--> goat (10 G.O.A.T. questions, while character creation is pending) or tags (3 Tag!
-skills, when it is already done). Per-person setup is stored under "_profiles" and
-applied by the manager on load.
+-> goat (10 G.O.A.T. questions, one per form with radio-button answers, while
+character creation is pending) or tags (3 Tag! skills, when it is already done).
+Per-person setup is stored under "_profiles" and applied by the manager on load.
 """
 
 from __future__ import annotations
@@ -279,71 +279,79 @@ class GamifiedGDTOptionsFlow(OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """G.O.A.T. step (Fallout 3 Vault 101 test), shown directly after the
-        S.P.E.C.I.A.L. step while character creation is pending: one dropdown per
-        question, all questions (and the slide images, when the user dropped them in)
-        in the markdown description. Submitting scores the answers via
-        goat_data.goat_result and stores SPECIAL + G.O.A.T. result + Tag! skills on the
-        person's profile — no dashboard card needed."""
+        S.P.E.C.I.A.L. step while character creation is pending. ONE question per form:
+        the question text (+ slide image when the user dropped it in) goes into the
+        markdown description, the 4 answers are radio buttons (SelectSelectorMode.LIST
+        renders a ha-radio-group) directly below it — so every answer is clearly tied
+        to its question. After the 10th answer, _goat_finish scores the answers and
+        stores SPECIAL + G.O.A.T. result + Tag! skills on the person's profile — no
+        dashboard card needed."""
+        if not hasattr(self, "_goat_idx"):
+            self._goat_idx = 0  # 0-based index of the question currently shown
+            self._goat_answers = []
         if user_input is not None:
-            answers = [int(user_input[f"q{q.n}"]) for q in QUESTIONS]
-            result = goat_result(answers)
-            profiles = dict(self._options.get("_profiles", {}))
-            profiles[self._person] = {
-                "special": self._special,
-                "goat": {
-                    "answers": answers,
-                    "counts": result["counts"],
-                    "tags": result["tags"],
-                    "job": result["job"],
-                    "completed_at": datetime.now(timezone.utc).isoformat(),
-                },
-                "tagged_skills": result["tags"],
-            }
-            self._options["_profiles"] = profiles
-            self._options[CONF_DEFAULT_PROFILE] = self._options.get(
-                CONF_DEFAULT_PROFILE, self._person
-            )
-            return self.async_create_entry(title="", data=self._options)
+            # store the answer of the question that was just shown, then advance
+            self._goat_answers.append(int(user_input["answer"]))
+            self._goat_idx += 1
+            if self._goat_idx >= len(QUESTIONS):
+                return await self._goat_finish()
+        q = QUESTIONS[self._goat_idx]
         # Slide images are user drop-ins (original FNV art is copyrighted):
         # www/gamified_gtd_icons/goat/slide_<n>.png, served under /<DOMAIN>_static/...
-        # Embed the image in the markdown description only when the file exists, so it
-        # never shows a broken image. Select option values must be strings (int values
-        # raise voluptuous errors -> frontend 400).
+        # Embed the image only when the file exists -> no broken images. Select option
+        # values must be strings (int values raise voluptuous errors -> frontend 400).
         goat_dir = os.path.join(
             os.path.dirname(__file__), "www", "gamified_gtd_icons", "goat"
         )
-        parts = []
-        for q in QUESTIONS:
-            slide_exists = os.path.exists(os.path.join(goat_dir, f"{q.slide}.png"))
-            img = (
-                f"\n\n![G.O.A.T. slide {q.n}](/{DOMAIN}_static/gamified_gtd_icons/goat/{q.slide}.png)"
-                if slide_exists
-                else ""
-            )
-            parts.append(f"**{q.n}.** {q.text}{img}")
-        questions_md = "\n\n".join(parts)
+        img = ""
+        if os.path.exists(os.path.join(goat_dir, f"{q.slide}.png")):
+            img = f"\n\n![G.O.A.T. slide {q.n}](/{DOMAIN}_static/gamified_gtd_icons/goat/{q.slide}.png)"
+        question_md = f"**Question {q.n} of {len(QUESTIONS)}.** {q.text}{img}"
         schema = vol.Schema(
             {
-                vol.Required(f"q{q.n}", default="0"): selector.SelectSelector(
+                vol.Required("answer", default="0"): selector.SelectSelector(
                     selector.SelectSelectorConfig(
                         options=[
                             selector.SelectOptionDict(value=str(i), label=a.text)
                             for i, a in enumerate(q.answers)
                         ],
-                        mode=selector.SelectSelectorMode.DROPDOWN,
+                        mode=selector.SelectSelectorMode.LIST,  # -> radio buttons
                     )
                 )
-                for q in QUESTIONS
             }
         )
         # async_show_form has no `description` kwarg — the step description comes from
-        # strings.json; the dynamic question markdown is injected via the
-        # {questions} placeholder (rendered as markdown by the frontend).
+        # strings.json; the dynamic question markdown is injected via the {question}
+        # placeholder (rendered as markdown by the frontend).
         return self.async_show_form(
             step_id="goat",
             data_schema=schema,
-            description_placeholders={"questions": questions_md},
+            description_placeholders={"question": question_md},
+            last_step=self._goat_idx == len(QUESTIONS) - 1,
         )
+
+    async def _goat_finish(self) -> ConfigFlowResult:
+        """Score the collected G.O.A.T. answers (one 0-based answer index per question)
+        via goat_data.goat_result and finish the options flow, storing SPECIAL + the
+        G.O.A.T. result + the derived Tag! skills on the chosen person's profile."""
+        result = goat_result(self._goat_answers)
+        profiles = dict(self._options.get("_profiles", {}))
+        profiles[self._person] = {
+            "special": self._special,
+            "goat": {
+                "answers": self._goat_answers,
+                "counts": result["counts"],
+                "tags": result["tags"],
+                "job": result["job"],
+                "completed_at": datetime.now(timezone.utc).isoformat(),
+            },
+            "tagged_skills": result["tags"],
+        }
+        self._options["_profiles"] = profiles
+        self._options[CONF_DEFAULT_PROFILE] = self._options.get(
+            CONF_DEFAULT_PROFILE, self._person
+        )
+        return self.async_create_entry(title="", data=self._options)
 
     async def async_step_tags(
         self, user_input: dict[str, Any] | None = None

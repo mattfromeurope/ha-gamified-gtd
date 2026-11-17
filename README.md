@@ -42,8 +42,9 @@ screen is the Level-Up card:
   you freely distribute **5 more points** (raise or lower, 1–10 each; the total must be
   exactly 40) — like character creation in FNV.
 - While character creation is pending, the **G.O.A.T. runs directly after the S.P.E.C.I.A.L.**
-  step in the same options flow (one form with 10 questions; the slide images appear in the
-  description when present) — no dashboard card needed. The pending notification at HA start
+  step in the same options flow (one question per form: question text + slide image in the
+  description, the 4 answers as radio buttons directly below; slide images appear when
+  present) — no dashboard card needed. The pending notification at HA start
   (and after `reset_profile`) links straight there. Alternatively, add the
   `custom:gamified-gtd-goat` card to a dashboard once at setup and answer the 10 questions
   there; the result is applied via `gamified_gtd.submit_goat` and stored on the profile

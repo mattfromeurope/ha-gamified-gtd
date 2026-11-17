@@ -211,8 +211,9 @@ persistent notification once at HA start, and reset_profile sends it immediately
 triggering user (resolved via the service-call context user_id → person entity; persistent
 notifications are global in HA, so the message text names the user). The notification links to
 `/config/integrations/integration/gamified_gtd`; its options flow runs S.P.E.C.I.A.L. first and
-the G.O.A.T. directly after (one form with 10 dropdowns, questions + slide images in the
-markdown description) — HA has no login event and no URL that starts a flow directly, so
+the G.O.A.T. directly after (one question per form: question text + slide image in the
+markdown description, 4 answers as radio buttons via SelectSelectorMode.LIST) — HA has
+no login event and no URL that starts a flow directly, so
 "next login" is approximated by the HA-start notification and "click" by one click on
 "Configure" on the integration page.
 
