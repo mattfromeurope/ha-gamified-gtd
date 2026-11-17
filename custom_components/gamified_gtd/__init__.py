@@ -110,6 +110,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     manager = GTDManager(hass, entry.entry_id, dict(entry.options or entry.data))
     await manager.async_load()
 
+    # One-time hint per profile without Tag! skills: take the G.O.A.T. (setup step).
+    try:
+        await manager.async_goat_pending_hint()
+    except Exception as err:  # noqa: BLE001 - a missing hint must never break setup
+        _LOGGER.warning("Could not send the G.O.A.T. hint: %s", err)
+
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = manager
     # Keep a flat list of managers — services use the first one for now.
     hass.data[DOMAIN]["managers"] = [

@@ -76,8 +76,21 @@ A GTD project (an outcome needing more than one action step) is a **quest**:
 ### S.P.E.C.I.A.L.
 
 7 attributes (Strength, Perception, Endurance, Charisma, Intelligence, Agility, Luck), each 1–10.
-Set **once per profile at setup**; afterwards only +1 via perks (e.g. *Intense Training*, up to 10×).
-Tasks never raise SPECIAL directly — they only grant XP.
+Set **once per profile at setup** in the options flow, like FNV character creation: every attribute
+starts at **5**, **5 points are freely distributed** (values may be raised AND lowered, 1–10 each,
+total must be exactly **40** — enforced by the config-flow validator). Afterwards only +1 via perks
+(e.g. *Intense Training*, up to 10×). Tasks never raise SPECIAL directly — they only grant XP.
+
+**Tag! skills via the G.O.A.T.:** instead of picking the 3 Tag! skills manually, the user takes the
+*Generalized Occupational Aptitude Test* (Fallout 3, Vault 101) once at setup via the
+`custom:gamified-gtd-goat` card: 10 questions (slide image per question), each answer scores 1 point
+per skill label (question 6 answer 2 scores two skills; question 10 — all answers "The Overseer." —
+scores nothing). The **top 3 skills become the Tag! skills** (ties alphabetical, per the wiki), the
+top skill determines the vault "job" shown as flavor text. Submitted via `gamified_gtd.submit_goat`
+(answers = 10 indices), stored on the profile (`goat` key, exposed as `goat` attribute on
+`sensor.<name>_level`), event `gamified_gtd_goat_completed`. Full questionnaire + slide image links
+(Fallout Wiki `FO3_GOAT_slide_<n>.jpg`, drop-in folder `gamified_gtd_icons/goat/`) in
+`custom_components/gamified_gtd/goat_data.py`.
 
 ### Skills (13, exactly as in FNV)
 
@@ -182,18 +195,19 @@ Sneak, Speech, Survival, Unarmed.
 | `add_to_inbox` | quick capture (title + optional fields incl. `time_estimate`/`energy`) |
 | `clarify` | process inbox item → next action (with context) / project / waiting-for / someday / done |
 | `complete_task` | XP (always), Caps (only if not overdue), Karma, level-up check, events |
-| `update_task` / `skip_task` / `remove_task` | editing |
+| `update_task` / `move_task` / `skip_task` / `remove_task` | editing; `move_task` moves a task between the GTD lists (keeps project + metadata), `update_task` also accepts `list` and `project_id` (assign to quest, keeps `project.task_ids` in sync) |
 | `create_project` / `add_to_project` / `complete_project` | quest management |
 | `allocate_skill_points` | distribute skill points from level-ups (person + skill + points) |
 | `choose_perk` | pick a perk every 2 levels; requirements (level/SPECIAL/skill) enforced |
 | `start_review` / `complete_review` | weekly review |
 | `redeem_reward` | spend caps on a reward |
+| `submit_goat` | G.O.A.T. answers (10 indices) → sets the 3 Tag! skills; returns tags + job |
 | `get_state` | full profile as response (automations, voice, LLM) |
 
 ## 6. Events
 
 `task_completed`, `level_up`, `perk_available`, `perk_chosen`, `quest_completed`,
-`review_completed`, `reward_redeemed` — each with the relevant data.
+`review_completed`, `reward_redeemed`, `goat_completed` — each with the relevant data.
 
 ## 7. Storage & options
 
@@ -211,15 +225,26 @@ HA built-ins (todo list card, developer tools, automations); the card is just th
 variant. Services themselves cannot open dialogs/popups in HA — dialogs are opened by the card
 (or via browser_mod in automations).
 
-Five separate card types (auto-registered by the integration, YAML-configurable):
+Ten separate card types (auto-registered by the integration, YAML-configurable). The profile
+cards mirror the Pip-Boy 3000 pages from the game and are **display-only** (no Add/Edit/Delete
+buttons); interactivity (skill points, perk choice) lives in the dedicated Level-Up card.
 
 | Card type | Shows / does | YAML options | Built-in equivalent |
 |---|---|---|---|
-| `gamified-gtd-stats` | Per person: level + XP bar, HP, karma title, caps, SPECIAL, skills, perks; dialogs to **allocate skill points** and **choose a perk** (with requirement display) | `person` | `sensor.<name>_*` + `allocate_skill_points` / `choose_perk` / `get_state` |
-| `gamified-gtd-quests` | Active quests with `x/y` progress, desired outcome, deadline; completed quests | `person` (optional) | `sensor.gtd_quest_log` + project services + `quest_completed` event |
-| `gamified-gtd-tasks` | One GTD list or all; add, complete, edit (priority, due, time/energy, context, person); **inbox mode with Clarify dialog** | `list`, `assigned` (`all` / `me` / person), `show_completed` | HA todo list card on `todo.gtd_*` (completing there awards XP/Caps/Karma via the entity) + `gamified_gtd.*` services |
+| `gamified-gtd-stats` | Pip-Boy **top bar**: HP bar, LEVEL + XP bar, CAPS; karma row below | `person`, `title` | `sensor.<name>_level/hp/karma/caps` |
+| `gamified-gtd-special` | The 7 S.P.E.C.I.A.L. attributes (icon, bar, value) like the STATS page | `person`, `title` | `sensor.<name>_special` |
+| `gamified-gtd-skills` | The 13 skills with bars; Tag! skills get a `TAG!` badge | `person`, `title` | `sensor.<name>_skills` (+ `tagged_skills` attribute) |
+| `gamified-gtd-perks` | **Only owned perks**, name + description each | `person`, `title` | `sensor.<name>_perks` (`perk_details` attribute) |
+| `gamified-gtd-levelup` | Skill points available + **allocate** dialog; pending perk choice + **choose** dialog (with requirement display, Intense Training/Tag! selectors) | `person`, `title` | `allocate_skill_points` / `choose_perk` / `get_state` |
+| `gamified-gtd-goat` | The **G.O.A.T.**: intro → 10 questions (slide image `goat/slide_<n>.png` if dropped in, else text fallback) → result (vault job + 3 Tag! skills) → `submit_goat`; shows stored result + retake | `person`, `title` | `submit_goat` service + `goat` attribute on the level sensor + `goat_completed` event |
+| `gamified-gtd-quests` | Active quests with `x/y` progress, desired outcome, deadline; completed quests | `title` | `sensor.gtd_quest_log` + project services + `quest_completed` event |
+| `gamified-gtd-tasks` | One GTD list or all; **full task form** (title, notes, list, project, assigned, due date+time, priority, time estimate, energy, context, tags, reminders, overdue repeat, location zone+mode — the Better ToDo option set plus GTD/gamification fields); per-row **move-to-list** select; complete checkbox; **inbox mode with Clarify dialog** | `list`, `assigned` (`all` / `me` / person), `show_completed`, `title` | HA todo list card on `todo.gtd_*` (completing there awards XP/Caps/Karma via the entity) + `gamified_gtd.*` services incl. `move_task` |
 | `gamified-gtd-review` | Review due?, auto-checked checklist, start/complete buttons, streak | `person` | `start_review` / `complete_review`, `days_since_review` attribute, `review_completed` event |
 | `gamified-gtd-rewards` | Reward shop with cap costs, balance, redeem button | `person` | `sensor.<name>_caps` + `redeem_reward` + `reward_redeemed` event |
+
+Note: HA does **not** expose todo items in a todo entity's state attributes (the built-in
+frontend uses websocket for that) — the integration therefore adds `todo_items` explicitly to
+the `todo.gtd_*` attributes, which is what the tasks card reads.
 
 ### Clarify dialog (inside `gamified-gtd-tasks`, inbox mode)
 

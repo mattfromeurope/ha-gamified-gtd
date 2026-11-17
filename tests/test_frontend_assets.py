@@ -17,7 +17,12 @@ CARDS = WWW / "gamified-gtd-cards.js"
 LIT = WWW / "gamified-gtd-lit.js"
 
 CARD_TAGS = [
-    "gamified-gtd-stats",
+    "gamified-gtd-stats",    # Pip-Boy top bar: HP | LEVEL+XP | CAPS + karma
+    "gamified-gtd-special",  # the 7 S.P.E.C.I.A.L. attributes
+    "gamified-gtd-skills",   # the 13 skills with TAG! badges
+    "gamified-gtd-perks",    # owned perks only
+    "gamified-gtd-levelup",  # skill points + perk choice (interactive)
+    "gamified-gtd-goat",     # G.O.A.T. test -> Tag! skills
     "gamified-gtd-quests",
     "gamified-gtd-tasks",
     "gamified-gtd-review",
@@ -39,12 +44,22 @@ def test_cards_module_loads_lit_dynamically_with_vendored_fallback():
     assert 'await import("./gamified-gtd-lit.js")' in src
 
 
-def test_all_five_cards_are_registered():
+def test_all_cards_are_registered():
     src = CARDS.read_text(encoding="utf-8")
     for tag in CARD_TAGS:
         assert f'defineCard("{tag}"' in src, f"card {tag} is not registered"
     # defineCard must guard against double registration (module can load twice)
     assert "customElements.get(tag)" in src
+
+
+def test_cards_read_todo_items_attribute():
+    """HA does not expose todo items in state attributes — the tasks card must read
+    the integration-provided `todo_items` attribute (todo.py adds it explicitly)."""
+    src = CARDS.read_text(encoding="utf-8")
+    assert "attributes.todo_items" in src
+    # and the move-between-lists + project assignment UI must exist
+    assert '"move_task"' in src
+    assert "td-project" in src
 
 
 def test_vendored_lit_bundle_exists_and_exports_lit_api():

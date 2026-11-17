@@ -78,8 +78,25 @@ class GTDTodoListEntity(TodoListEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Per-task metadata (assigned_to, context, project, priority, time, energy,
-        tags, status) keyed by task id — read by the custom tasks card."""
+        """State attributes for the custom tasks card.
+
+        IMPORTANT: HA does NOT put `todo_items` into the state attributes of a todo
+        entity (the frontend gets items via websocket) — so we expose them explicitly
+        here as plain dicts. Without this key the custom card sees no tasks at all
+        ("list cards show nothing") even though the built-in todo card works.
+        Also carries per-task metadata (assigned_to, context, project, ...) under
+        'tasks' keyed by task id.
+        """
+        items = [
+            {
+                "uid": item.uid,
+                "summary": item.summary,
+                "status": str(item.status),  # StrEnum -> "needs_action" / "completed"
+                "due": item.due.isoformat() if item.due else None,
+                "description": item.description,
+            }
+            for item in (self.todo_items or [])
+        ]
         tasks = {
             task["id"]: {
                 "assigned_to": task.get("assigned_to"),
@@ -90,11 +107,16 @@ class GTDTodoListEntity(TodoListEntity):
                 "energy": task.get("energy"),
                 "tags": task.get("tags", []),
                 "status": task["status"],
+                # notification fields so the edit form can prefill them
+                "due_time": task.get("due_time"),
+                "reminders": task.get("reminders", []),
+                "location": task.get("location"),
+                "overdue_repeat": task.get("overdue_repeat"),
             }
             for task in self._manager.data["tasks"].values()
             if task["list"] == self._list_key
         }
-        return {"tasks": tasks}
+        return {"todo_items": items, "tasks": tasks}
 
     async def async_create_todo_item(self, item: TodoItem) -> None:
         """HA todo 'add item' -> creates the task via the manager (in this list)."""

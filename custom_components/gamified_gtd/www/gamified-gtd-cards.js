@@ -26,10 +26,12 @@ function defineCard(tag, cls) {
 
 /* Gamified GTD — Pip-Boy style custom cards (continued).
  *
- * Icons: original Fallout: New Vegas icons are copyrighted and NOT shipped.
- * Drop your own files into custom_components/gamified_gtd/www/gamified_gtd_icons/
- *   <kind>/<id>.png   e.g. special/strength.png, skill/guns.png, perk/swift_learner.png
- * The card loads them automatically and falls back to text glyphs otherwise.
+ * Icons: original Fallout icons (SPECIAL, skills, perks, quests, GOAT slides)
+ * are copyrighted and NOT shipped. Drop your own files into
+ * custom_components/gamified_gtd/www/gamified_gtd_icons/
+ *   <kind>/<id>.png   e.g. special/strength.png, skill/guns.png, perk/swift_learner.png,
+ *                     goat/slide_1.png (G.O.A.T. slides from the Fallout wiki)
+ * The cards load them automatically and fall back to text glyphs otherwise.
  */
 
 const DOMAIN = "gamified_gtd";
@@ -67,6 +69,32 @@ const LISTS = {
   someday_maybe: { entity: "todo.gtd_someday_maybe", label: "SOMEDAY/MAYBE" },
 };
 
+// The 10 G.O.A.T. questions (Fallout 3, Vault 101). Scoring happens server-side
+// (goat_data.py / submit_goat); the card only needs the texts + answer options.
+// Slide images come from the drop-in folder goat/slide_<n>.png (not shipped).
+const GOAT = [
+  { n: 1, text: "You are approached by a frenzied Vault scientist, who yells, \"I'm going to put my quantum harmonizer in your photonic resonation chamber!\" What's your response?",
+    answers: ["\"But doctor, wouldn't that cause a parabolic destabilization of the fission singularity?\"", "\"Yeah? Up yours too, buddy!\"", "Say nothing, grab a nearby pipe and hit the scientist in the head to knock him out.", "Say nothing, but slip away before the scientist can continue his rant."] },
+  { n: 2, text: "While working as an intern in the Clinic, a patient with a strange infection on his foot stumbles through the door. The infection is spreading at an alarming rate, but the doctor has stepped out for a while. What do you do?",
+    answers: ["Amputate the foot before the infection spreads.", "Scream for help.", "Medicate the infected area to the best of your abilities.", "Restrain the patient, and merely observe as the infection spreads."] },
+  { n: 3, text: "You discover a young boy lost in the lower levels of the Vault. He's hungry and frightened, but also appears to be in possession of stolen property. What do you do?",
+    answers: ["Give the boy a hug and tell him everything will be okay.", "Confiscate the property by force, and leave him there as punishment.", "Pick the boy's pocket to take the stolen property for yourself.", "Lead the boy to safety, then turn him over to the overseer."] },
+  { n: 4, text: "Congratulations! You made one of the Vault 101 baseball teams! Which position do you prefer?",
+    answers: ["Pitcher.", "Catcher.", "Designated Hitter.", "None, you wish the vault had a soccer team."] },
+  { n: 5, text: "Your grandmother invites you to tea, but you're surprised when she gives you a pistol and orders you to kill another Vault resident. What do you do?",
+    answers: ["Obey your elder and kill the Vault resident with the pistol.", "Offer your most prized possession for the resident's life.", "Ask granny for a minigun instead. After all, you don't want to miss.", "Throw your tea in granny's face."] },
+  { n: 6, text: "Old Mr. Abernathy has locked himself in his quarters again, and you've been ordered to get him out. How do you proceed?",
+    answers: ["Use a bobby pin to pick the lock on the door.", "Trade a Vault hoodlum for his cherry bomb and blow open the lock.", "Go to the armory, retrieve a laser pistol, and blow the lock off.", "Walk away, and let the old coot rot."] },
+  { n: 7, text: "Oh, no! You've been exposed to radiation, and a mutated hand has grown out of your stomach! What's the best course of treatment?",
+    answers: ["A bullet to the brain.", "Large doses of anti-mutagen agent.", "Prayer. Maybe God will spare you in exchange for a life of pious devotion.", "Removal of the mutated tissue with a precision laser."] },
+  { n: 8, text: "A fellow Vault 101 resident is in possession of a Grognak the Barbarian comic book, issue number 1. You want it. What's the best way to obtain it?",
+    answers: ["Trade the comic book for one of your own valuable possessions.", "Steal the comic book at gunpoint.", "Sneak into the resident's quarters, and steal the comic book from his desk.", "Slip some knock out drops into the resident's Nuka-Cola, and take the comic book when he's unconscious."] },
+  { n: 9, text: "You decide it would be fun to play a prank on your father. You enter his private restroom when no one is looking, and…",
+    answers: ["Loosen some bolts on some pipes. When the sink is turned on, the room will flood.", "Put a firecracker in the toilet. That's sure to cause some chaos.", "Break into the locked medicine cabinet and replace his high blood pressure medication with sugar pills.", "Manipulate the power wattage on his razor, so he'll get an electric shock next time he shaves."] },
+  { n: 10, text: "Who is indisputably the most important person in Vault 101: He who shelters us from the harshness of the atomic wasteland, and to whom we owe everything we have, including our lives?",
+    answers: ["The Overseer.", "The Overseer.", "The Overseer.", "The Overseer."] },
+];
+
 // person.alex -> "alex" (used to build sensor entity ids).
 function personName(person) {
   return (person || "").replace(/^person\./, "").replace(/\./g, "_");
@@ -84,12 +112,16 @@ function mePerson(hass) {
   );
   return p ? p.entity_id : null;
 }
+// All person.* / zone.* entity ids (for the assignment / location selects).
+function entitiesOf(hass, domain) {
+  return Object.keys(hass.states).filter((e) => e.startsWith(domain + ".")).sort();
+}
 
 // Icon helper: tries <kind>/<id>.png from the user drop-in folder first; on load the
 // text fallback is removed, on error the <img> removes itself and the fallback stays.
-function icon(kind, id, fallback) {
+function icon(kind, id, fallback, big) {
   const src = `${ICONS}/${kind}/${id}.png`;
-  return html`<span class="gicon"
+  return html`<span class="gicon ${big ? "big" : ""}"
     ><span class="gicon-fb">${fallback}</span
     ><img
       src="${src}"
@@ -140,11 +172,30 @@ const pipCss = css`
     position: absolute; inset: 0; text-align: center;
     font-size: 0.7em; line-height: 12px; color: #04140a; font-weight: bold;
   }
+  /* Pip-Boy 3000 top bar (layout of the stats card): HP | LEVEL+XP | CAPS. */
+  .topbar { display: flex; align-items: stretch; gap: 12px; }
+  .topbar .seg { display: flex; align-items: center; gap: 8px; }
+  .topbar .seg.hp { flex: 1.4; }
+  .topbar .seg.lvl { flex: 2; flex-direction: column; align-items: stretch; gap: 2px; }
+  .topbar .seg.caps { flex: 0.8; justify-content: flex-end; }
+  .topbar .seg .big { font-size: 1.3em; font-weight: bold; }
+  .topbar .seg .cap { font-size: 0.75em; color: var(--pip-dim); }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 4px 10px; margin-top: 6px; }
   .cell { display: flex; align-items: center; gap: 6px; font-size: 0.85em; }
-  .gicon { position: relative; display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; }
-  .gicon img { position: absolute; inset: 0; width: 22px; height: 22px; object-fit: contain; filter: sepia(1) hue-rotate(70deg) saturate(4); }
+  .gicon { position: relative; display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; flex: none; }
+  .gicon.big { width: 96px; height: 96px; }
+  .gicon img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; filter: sepia(1) hue-rotate(70deg) saturate(4); }
   .gicon-fb { font-size: 0.75em; font-weight: bold; border: 1px solid var(--pip-dim); padding: 1px 3px; }
+  .gicon.big .gicon-fb { font-size: 1.6em; padding: 6px 10px; }
+  /* SPECIAL / skills rows like the Pip-Boy STATS pages. */
+  .srow { display: flex; align-items: center; gap: 10px; padding: 4px 0; border-bottom: 1px dashed rgba(74,255,74,0.2); }
+  .srow .nm { width: 150px; font-size: 0.85em; color: var(--pip-dim); }
+  .srow .bar { height: 10px; }
+  .srow .val { width: 34px; text-align: right; }
+  .tagbadge { border: 1px solid var(--pip); color: var(--pip); font-size: 0.65em; padding: 0 4px; margin-left: 6px; }
+  .perk { border: 1px solid var(--pip-dim); padding: 6px 8px; margin-bottom: 6px; }
+  .perk .p-name { font-weight: bold; display: flex; align-items: center; gap: 8px; }
+  .perk .p-desc { color: var(--pip-dim); font-size: 0.78em; text-transform: none; margin-top: 2px; }
   button, .btn {
     font-family: inherit; text-transform: uppercase; letter-spacing: 0.04em;
     background: transparent; color: var(--pip); border: 1px solid var(--pip-dim);
@@ -153,52 +204,71 @@ const pipCss = css`
   button:hover:not(:disabled), .btn:hover { background: var(--pip); color: #04140a; }
   button:disabled { opacity: 0.35; cursor: default; }
   .btns { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
-  .task { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px dashed rgba(74,255,74,0.2); }
-  .task .t-title { flex: 1; }
+  .task { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px dashed rgba(74,255,74,0.2); flex-wrap: wrap; }
+  .task .t-title { flex: 1; min-width: 120px; }
   .task.done .t-title { text-decoration: line-through; opacity: 0.6; }
   .badge { border: 1px solid var(--pip-dim); padding: 0 5px; font-size: 0.72em; color: var(--pip-dim); }
+  select.move { background: var(--pip-dark); color: var(--pip); border: 1px solid var(--pip-dim); font-family: inherit; font-size: 0.72em; text-transform: uppercase; }
   .checklist { margin: 6px 0; }
   .checklist .cl-ok { color: var(--pip); }
   .checklist .cl-no { color: #ff5f56; }
   .quest { border: 1px solid var(--pip-dim); padding: 6px 8px; margin-bottom: 6px; }
   .quest .q-name { font-weight: bold; }
   .quest .q-outcome { color: var(--pip-dim); font-size: 0.8em; text-transform: none; }
-  ha-dialog { --mdc-dialog-min-width: 420px; }
-  ha-dialog .dlg { color: var(--pip); font-family: "Courier New", ui-monospace, monospace; text-transform: uppercase; }
+  ha-dialog { --mdc-dialog-min-width: 460px; }
+  ha-dialog .dlg { color: var(--pip); font-family: "Courier New", ui-monospace, monospace; text-transform: uppercase; max-height: 62vh; overflow-y: auto; }
   ha-dialog label { display: block; margin: 8px 0 2px; color: var(--pip-dim); font-size: 0.8em; }
-  ha-dialog input, ha-dialog select {
+  ha-dialog input, ha-dialog select, ha-dialog textarea {
     width: 100%; background: var(--pip-dark); color: var(--pip);
-    border: 1px solid var(--pip-dim); padding: 6px; font-family: inherit;
+    border: 1px solid var(--pip-dim); padding: 6px; font-family: inherit; box-sizing: border-box;
   }
+  ha-dialog textarea { min-height: 48px; }
   .seg { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
   .seg button.on { background: var(--pip); color: #04140a; }
   .empty { color: var(--pip-dim); font-style: italic; text-transform: none; }
+  /* G.O.A.T. card */
+  .goat-slide { display: flex; justify-content: center; margin: 8px 0; }
+  .goat-q { font-size: 0.95em; text-transform: none; line-height: 1.4; margin: 8px 0; }
+  .goat-answers button { display: block; width: 100%; text-align: left; margin: 6px 0; text-transform: none; white-space: normal; }
+  .goat-job { border: 1px solid var(--pip); padding: 8px; margin: 8px 0; }
+  .goat-job .j-name { font-weight: bold; font-size: 1.1em; }
+  .goat-job .j-comment { color: var(--pip-dim); font-size: 0.8em; text-transform: none; margin-top: 4px; }
 `;
 
 // Call a gamified_gtd service — the ONLY write path from cards (thin-frontend rule).
 function svc(hass, service, data) {
   return hass.callService(DOMAIN, service, data);
 }
+// Same, but for services with a response (supports_response) — submit_goat / get_state.
+async function svcResp(hass, service, data) {
+  const res = await hass.connection.sendMessagePromise({
+    type: "call_service",
+    domain: DOMAIN,
+    service,
+    service_data: data,
+    return_response: true,
+  });
+  return res && res.response ? res.response : res;
+}
 
 /* ------------------------------------------------------------------ */
-/* Stats card                                                          */
+/* Stats card — Pip-Boy 3000 top bar: HP | LEVEL + XP bar | CAPS        */
+/* (display only, like the in-game top bar; karma row below)           */
 /* ------------------------------------------------------------------ */
 
 class GamifiedGTDStatsCard extends LitElement {
-  // Pip-Boy stats card: level/XP bar, HP, karma, caps, SPECIAL, skills, perks +
-  // dialogs for skill point allocation and perk choice (config: person, title).
   static get properties() {
-    return { hass: {}, config: {}, _dlg: {} };
+    return { hass: {}, config: {} };
   }
   static getStubConfig() {
-    return { person: "person.example", title: "PIP-BOY" };
+    return { person: "person.example", title: "PIP-BOY 3000" };
   }
   setConfig(config) {
     if (!config.person) throw new Error("person is required");
     this.config = config;
   }
   getCardSize() {
-    return 6;
+    return 2;
   }
   // Shortcut: state object of this person's sensor with the given suffix.
   _s(suffix) {
@@ -208,12 +278,9 @@ class GamifiedGTDStatsCard extends LitElement {
     const level = this._s("level");
     if (!level) return html`<ha-card><div class="empty">sensor not found for ${this.config.person}</div></ha-card>`;
     const a = level.attributes;
-    const special = this._s("special");
-    const skills = this._s("skills");
+    const hp = this._s("hp");
     const karma = this._s("karma");
     const caps = this._s("caps");
-    const hp = this._s("hp");
-    const perks = this._s("perks");
     const xpPct = Math.min(100, Math.round((100 * (a.xp_in_level || 0)) / (a.xp_level_span || 1)));
     return html`
       <ha-card>
@@ -221,28 +288,189 @@ class GamifiedGTDStatsCard extends LitElement {
           <span class="title">${this.config.title || "PIP-BOY 3000"}</span>
           <span class="sub">${this.config.person}</span>
         </div>
-        <div class="row"><span class="lbl">LEVEL</span><span class="val">${level.state}</span>
-          <div class="bar"><div style="width:${xpPct}%"></div><span>XP ${a.xp} / -${a.xp_to_next}</span></div>
+        <div class="topbar">
+          <div class="seg hp">
+            <span class="cap">HP</span>
+            <div class="bar"><div style="width:100%"></div><span>${hp ? hp.state : "?"}</span></div>
+          </div>
+          <div class="seg lvl">
+            <div class="row"><span class="cap">LEVEL</span><span class="big">${level.state}</span></div>
+            <div class="bar"><div style="width:${xpPct}%"></div><span>XP ${a.xp} / -${a.xp_to_next}</span></div>
+          </div>
+          <div class="seg caps">
+            <span class="cap">CAPS</span>
+            <span class="big">${caps ? caps.state : 0}</span>
+          </div>
         </div>
-        <div class="row"><span class="lbl">HP</span><span class="val">${hp ? hp.state : "?"}</span>
-          <span class="lbl" style="width:auto">KARMA</span><span class="val">${karma ? karma.state : "?"} (${karma ? karma.attributes.karma : 0})</span>
-          <span class="lbl" style="width:auto">CAPS</span><span class="val">${caps ? caps.state : 0}</span>
+        <div class="row" style="margin-top:8px">
+          <span class="lbl">KARMA</span>
+          <span class="val">${karma ? karma.state : "?"}</span>
+          <span class="badge">${karma ? karma.attributes.karma : 0}</span>
         </div>
-        <div class="grid">
-          ${SPECIAL.map((s) => html`
-            <div class="cell">${icon("special", s.id, s.fb)}<span class="lbl" style="width:auto">${s.id}</span>
-              <span class="val">${special ? special.attributes[s.id] : "?"}</span></div>`)}
+      </ha-card>`;
+  }
+  static get styles() {
+    return pipCss;
+  }
+}
+defineCard("gamified-gtd-stats", GamifiedGTDStatsCard);
+
+/* ------------------------------------------------------------------ */
+/* SPECIAL card — the 7 attributes like the Pip-Boy STATS page          */
+/* ------------------------------------------------------------------ */
+
+class GamifiedGTDSPECIALCard extends LitElement {
+  static get properties() {
+    return { hass: {}, config: {} };
+  }
+  static getStubConfig() {
+    return { person: "person.example", title: "S.P.E.C.I.A.L." };
+  }
+  setConfig(config) {
+    if (!config.person) throw new Error("person is required");
+    this.config = config;
+  }
+  getCardSize() {
+    return 4;
+  }
+  render() {
+    const special = this.hass.states[sensorId(this.config.person, "special")];
+    return html`
+      <ha-card>
+        <div class="head"><span class="title">${this.config.title || "S.P.E.C.I.A.L."}</span>
+          <span class="sub">${this.config.person}</span></div>
+        ${SPECIAL.map((s) => html`
+          <div class="srow">
+            ${icon("special", s.id, s.fb)}
+            <span class="nm">${s.id}</span>
+            <div class="bar"><div style="width:${(special ? special.attributes[s.id] : 5) * 10}%"></div></div>
+            <span class="val">${special ? special.attributes[s.id] : "?"}</span>
+          </div>`)}
+      </ha-card>`;
+  }
+  static get styles() {
+    return pipCss;
+  }
+}
+defineCard("gamified-gtd-special", GamifiedGTDSPECIALCard);
+
+/* ------------------------------------------------------------------ */
+/* Skills card — the 13 skills with bars; Tag! skills get a badge       */
+/* ------------------------------------------------------------------ */
+
+class GamifiedGDTDSkillsCard extends LitElement {
+  static get properties() {
+    return { hass: {}, config: {} };
+  }
+  static getStubConfig() {
+    return { person: "person.example", title: "SKILLS" };
+  }
+  setConfig(config) {
+    if (!config.person) throw new Error("person is required");
+    this.config = config;
+  }
+  getCardSize() {
+    return 6;
+  }
+  render() {
+    const skills = this.hass.states[sensorId(this.config.person, "skills")];
+    const tagged = new Set((skills && skills.attributes.tagged_skills) || []);
+    return html`
+      <ha-card>
+        <div class="head"><span class="title">${this.config.title || "SKILLS"}</span>
+          <span class="sub">${this.config.person}</span></div>
+        ${SKILLS.map((s) => {
+          const v = skills ? skills.attributes[s.id] : 0;
+          return html`
+            <div class="srow">
+              ${icon("skill", s.id, s.fb)}
+              <span class="nm">${s.id.replace(/_/g, " ")}${tagged.has(s.id) ? html`<span class="tagbadge">TAG!</span>` : ""}</span>
+              <div class="bar"><div style="width:${Math.min(100, v)}%"></div></div>
+              <span class="val">${skills ? v : "?"}</span>
+            </div>`;
+        })}
+      </ha-card>`;
+  }
+  static get styles() {
+    return pipCss;
+  }
+}
+defineCard("gamified-gtd-skills", GamifiedGDTDSkillsCard);
+
+/* ------------------------------------------------------------------ */
+/* Perks card — ONLY the perks the player owns, with descriptions       */
+/* ------------------------------------------------------------------ */
+
+class GamifiedGTDPerksCard extends LitElement {
+  static get properties() {
+    return { hass: {}, config: {} };
+  }
+  static getStubConfig() {
+    return { person: "person.example", title: "PERKS" };
+  }
+  setConfig(config) {
+    if (!config.person) throw new Error("person is required");
+    this.config = config;
+  }
+  getCardSize() {
+    return 4;
+  }
+  render() {
+    const perks = this.hass.states[sensorId(this.config.person, "perks")];
+    const details = (perks && perks.attributes.perk_details) || [];
+    return html`
+      <ha-card>
+        <div class="head"><span class="title">${this.config.title || "PERKS"}</span>
+          <span class="sub">${details.length} owned</span></div>
+        ${details.length === 0 ? html`<div class="empty">No perks yet — every 2 levels you may choose one.</div>` : ""}
+        ${details.map((p) => html`
+          <div class="perk">
+            <div class="p-name">${icon("perk", p.id, p.name[0])}${p.name}</div>
+            <div class="p-desc">${p.description}</div>
+          </div>`)}
+      </ha-card>`;
+  }
+  static get styles() {
+    return pipCss;
+  }
+}
+defineCard("gamified-gtd-perks", GamifiedGTDPerksCard);
+
+/* ------------------------------------------------------------------ */
+/* Level-up card — the interactive character screen: spend skill points */
+/* and choose a perk (the Pip-Boy's level-up dialogs)                  */
+/* ------------------------------------------------------------------ */
+
+class GamifiedGTDLevelupCard extends LitElement {
+  static get properties() {
+    return { hass: {}, config: {}, _dlg: {} };
+  }
+  static getStubConfig() {
+    return { person: "person.example", title: "LEVEL UP" };
+  }
+  setConfig(config) {
+    if (!config.person) throw new Error("person is required");
+    this.config = config;
+  }
+  getCardSize() {
+    return 3;
+  }
+  _level() {
+    return this.hass.states[sensorId(this.config.person, "level")];
+  }
+  render() {
+    const level = this._level();
+    if (!level) return html`<ha-card><div class="empty">sensor not found</div></ha-card>`;
+    const a = level.attributes;
+    return html`
+      <ha-card>
+        <div class="head"><span class="title">${this.config.title || "LEVEL UP"}</span>
+          <span class="sub">LEVEL ${level.state}</span></div>
+        <div class="row"><span class="lbl">SKILL POINTS</span><span class="val">${a.skill_points_available}</span>
+          <button ?disabled=${!(a.skill_points_available > 0)} @click=${() => (this._dlg = "skills")}>Allocate</button>
         </div>
-        <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))">
-          ${SKILLS.map((s) => html`
-            <div class="cell">${icon("skill", s.id, s.fb)}<span class="lbl" style="width:auto">${s.id.replace(/_/g, " ")}</span>
-              <span class="val">${skills ? skills.attributes[s.id] : "?"}</span></div>`)}
-        </div>
-        <div class="row" style="margin-top:8px"><span class="lbl">PERKS</span>
-          <span>${(perks && perks.attributes.perk_names) ? Object.values(perks.attributes.perk_names).join(", ") || "—" : "—"}</span>
-        </div>
-        <div class="btns">
-          <button ?disabled=${!(a.skill_points_available > 0)} @click=${() => (this._dlg = "skills")}>Skill points (${a.skill_points_available})</button>
+        <div class="row"><span class="lbl">PERK CHOICE</span>
+          <span class="val">${a.perk_choice_pending ? "PENDING" : "—"}</span>
           <button ?disabled=${!a.perk_choice_pending} @click=${() => (this._dlg = "perk")}>Choose perk</button>
         </div>
         ${this._renderSkillDialog(a)}
@@ -303,7 +531,121 @@ class GamifiedGTDStatsCard extends LitElement {
     return pipCss;
   }
 }
-defineCard("gamified-gtd-stats", GamifiedGTDStatsCard);
+defineCard("gamified-gtd-levelup", GamifiedGTDLevelupCard);
+
+/* ------------------------------------------------------------------ */
+/* G.O.A.T. card — the Vault 101 aptitude test; sets the Tag! skills    */
+/* ------------------------------------------------------------------ */
+
+class GamifiedGTDGoatCard extends LitElement {
+  // Stages: "intro" -> "q" (this._qi = question index) -> "result".
+  // Slide images come from the drop-in folder goat/slide_<n>.png.
+  static get properties() {
+    return { hass: {}, config: {}, _stage: {}, _qi: {}, _answers: {}, _result: {} };
+  }
+  static getStubConfig() {
+    return { person: "person.example", title: "G.O.A.T." };
+  }
+  setConfig(config) {
+    if (!config.person) throw new Error("person is required");
+    this.config = { title: "G.O.A.T.", ...config };
+    this._stage = "intro";
+    this._qi = 0;
+    this._answers = [];
+    this._result = null;
+  }
+  getCardSize() {
+    return 5;
+  }
+  // Stored GOAT result of this person (null until the test was taken).
+  _stored() {
+    const level = this.hass.states[sensorId(this.config.person, "level")];
+    return (level && level.attributes.goat) || null;
+  }
+  render() {
+    const stored = this._stored();
+    return html`
+      <ha-card>
+        <div class="head"><span class="title">${this.config.title}</span>
+          <span class="sub">${this.config.person}</span></div>
+        ${this._stage === "intro" ? this._renderIntro(stored) : ""}
+        ${this._stage === "q" ? this._renderQuestion() : ""}
+        ${this._stage === "result" ? this._renderResult(stored) : ""}
+      </ha-card>`;
+  }
+  _renderIntro(stored) {
+    return html`
+      <div class="goat-q">GENERALIZED OCCUPATIONAL APTITUDE TEST — Vault 101, age 16.
+        Answer 10 questions; the test determines your 3 Tag! skills (+15 each).</div>
+      ${stored ? html`
+        <div class="goat-job">
+          <div class="j-name">ALREADY COMPLETED: ${stored.job.name}</div>
+          <div class="j-comment">Tag! skills: ${stored.tags.join(", ")}</div>
+        </div>
+        <div class="btns"><button @click=${() => { this._stage = "q"; this._qi = 0; this._answers = []; this._result = null; this.requestUpdate(); }}>Retake the test</button></div>
+      ` : html`
+        <div class="btns"><button @click=${() => { this._stage = "q"; this._qi = 0; this._answers = []; this.requestUpdate(); }}>Start the test</button></div>
+      `}`;
+  }
+  _renderQuestion() {
+    const q = GOAT[this._qi];
+    return html`
+      <div class="row"><span class="lbl">QUESTION ${q.n}/${GOAT.length}</span></div>
+      <div class="goat-slide">${icon("goat", `slide_${q.n}`, `SLIDE ${q.n}`, true)}</div>
+      <div class="goat-q">${q.text}</div>
+      <div class="goat-answers">
+        ${q.answers.map((a, i) => html`
+          <button @click=${() => {
+            this._answers = [...this._answers, i];
+            if (this._qi + 1 >= GOAT.length) {
+              this._stage = "result";
+            } else {
+              this._qi = this._qi + 1;
+            }
+            this.requestUpdate();
+          }}>${a}</button>`)}
+      </div>`;
+  }
+  _renderResult(stored) {
+    // After submitting, the server stores the result on the profile (sensor attr).
+    const res = this._result || (stored && { tags: stored.tags, job: stored.job });
+    return html`
+      <div class="row"><span class="lbl">RESULT</span></div>
+      ${res ? html`
+        <div class="goat-job">
+          <div class="j-name">JOB: ${res.job.name}</div>
+          <div class="j-comment">${res.job.comment}</div>
+        </div>
+        <div class="row"><span class="lbl">TAG! SKILLS</span>
+          <span>${res.tags.map((t) => html`<span class="cell">${icon("skill", t, (SKILLS.find((x) => x.id === t) || { fb: "?" }).fb)} ${t.replace(/_/g, " ")}</span>`)}</span>
+        </div>
+        ${this._result ? html`<div class="empty">Applied — the Tag! skills are active on the profile.</div>` : html`<div class="empty">Already applied to the profile.</div>`}
+      ` : html`
+        <div class="goat-q">You finished all ${GOAT.length} questions.</div>
+        <div class="btns">
+          <button @click=${async () => {
+            // Submit via the service (returns tags + job); fall back to the stored
+            // profile value if the websocket response is unavailable.
+            try {
+              this._result = await svcResp(this.hass, "submit_goat", {
+                person: this.config.person,
+                answers: this._answers,
+              });
+            } catch (e) {
+              const st = this._stored();
+              this._result = st ? { tags: st.tags, job: st.job } : null;
+            }
+            this.requestUpdate();
+          }}>Apply result (set Tag! skills)</button>
+          <button @click=${() => { this._stage = "intro"; this.requestUpdate(); }}>Back</button>
+        </div>`}
+    `;
+  }
+  static get styles() {
+    return pipCss;
+  }
+}
+defineCard("gamified-gtd-goat", GamifiedGTDGoatCard);
 
 /* ------------------------------------------------------------------ */
 /* Quests card                                                         */
@@ -384,9 +726,13 @@ defineCard("gamified-gtd-quests", GamifiedGTDQuestsCard);
 /* ------------------------------------------------------------------ */
 
 class GamifiedGTDTasksCard extends LitElement {
-  // Tasks card: shows one GTD list (or all) from the todo.gtd_* entities with
-  // metadata attributes; add/edit/complete/remove via services; the inbox rows get
-  // the Clarify dialog (config: list, assigned, show_completed, title).
+  // Tasks card: shows one GTD list (or all) from the todo.gtd_* entities.
+  // Items come from the entity attribute "todo_items" (HA does NOT expose todo
+  // items in state attributes by itself — the integration adds them explicitly),
+  // metadata from the attribute "tasks" keyed by uid. Rows can be moved between
+  // lists (move_task select) and assigned to quests; add/edit opens the full
+  // task form (same options as Better ToDo's dialog, plus list/project/time/
+  // energy). Config: list, assigned, show_completed, title.
   static get properties() {
     return { hass: {}, config: {}, _dlg: {}, _task: {} };
   }
@@ -422,6 +768,12 @@ class GamifiedGTDTasksCard extends LitElement {
     if (!this.config.show_completed) items = items.filter((i) => i.status !== "completed");
     return items;
   }
+  // Quest name lookup for the project badge on a task row.
+  _questName(projectId) {
+    const log = this.hass.states["sensor.gtd_quest_log"];
+    const q = log && log.attributes.quests ? log.attributes.quests[projectId] : null;
+    return q ? q.name : projectId;
+  }
   render() {
     const items = this._items();
     return html`
@@ -438,6 +790,12 @@ class GamifiedGTDTasksCard extends LitElement {
             ${i.meta.context ? html`<span class="badge">${i.meta.context}</span>` : ""}
             ${i.due ? html`<span class="badge">${i.due}</span>` : ""}
             ${i.meta.assigned_to ? html`<span class="badge">${i.meta.assigned_to.replace("person.", "")}</span>` : ""}
+            ${i.meta.project_id ? html`<span class="badge">Q: ${this._questName(i.meta.project_id)}</span>` : ""}
+            ${(i.meta.tags || []).map((t) => html`<span class="badge">#${t}</span>`)}
+            <select class="move" title="Move to another list"
+              @change=${(e) => svc(this.hass, "move_task", { task_id: i.uid, list: e.target.value })}>
+              ${Object.entries(LISTS).map(([k, l]) => html`<option value=${k} ?selected=${i.list === k}>${l.label}</option>`)}
+            </select>
             ${i.list === "inbox" ? html`<button @click=${() => { this._task = i; this._dlg = "clarify"; }}>Clarify</button>` : ""}
             <button @click=${() => { this._task = i; this._dlg = "edit"; }}>Edit</button>
             <button @click=${() => svc(this.hass, "remove_task", { task_id: i.uid })}>✕</button>
@@ -447,14 +805,45 @@ class GamifiedGTDTasksCard extends LitElement {
         ${this._renderClarifyDialog()}
       </ha-card>`;
   }
+  // The full task form (same options as Better ToDo's task dialog, plus the GTD /
+  // gamification fields: list, project, time estimate, energy).
   _taskFields() {
+    const t = this._task;
+    const m = (t && t.meta) || {};
+    const persons = entitiesOf(this.hass, "person");
+    const zones = entitiesOf(this.hass, "zone");
+    const log = this.hass.states["sensor.gtd_quest_log"];
+    const quests = log ? Object.entries(log.attributes.quests || {}).filter(([, q]) => q.status === "active") : [];
+    const loc = m.location || null;
     return html`
-      <label>Title</label><input id="td-title" type="text" .value=${this._task ? this._task.summary : ""} />
-      <label>Priority (1-5)</label><input id="td-priority" type="number" min="1" max="5" .value=${this._task?.meta?.priority || 3} />
-      <label>Due</label><input id="td-due" type="date" .value=${this._task?.due || ""} />
-      <label>Time estimate (min)</label><input id="td-time" type="number" min="0" .value=${this._task?.meta?.time_estimate || ""} />
-      <label>Energy (1-5)</label><input id="td-energy" type="number" min="1" max="5" .value=${this._task?.meta?.energy || 3} />
-      <label>Context</label><input id="td-context" type="text" placeholder="@home" .value=${this._task?.meta?.context || ""} />`;
+      <label>Title</label><input id="td-title" type="text" .value=${t ? t.summary : ""} />
+      <label>Notes</label><textarea id="td-notes">${t && t.description ? t.description : ""}</textarea>
+      <label>List</label>
+      <select id="td-list">${Object.entries(LISTS).map(([k, l]) => html`<option value=${k} ?selected=${(t ? t.list : this.config.list) === k}>${l.label}</option>`)}</select>
+      <label>Project (quest)</label>
+      <select id="td-project"><option value="">— none —</option>
+        ${quests.map(([id, q]) => html`<option value=${id} ?selected=${m.project_id === id}>${q.name}</option>`)}</select>
+      <label>Assigned to</label>
+      <select id="td-assigned"><option value="">— unassigned —</option>
+        ${persons.map((p) => html`<option value=${p} ?selected=${m.assigned_to === p}>${p}</option>`)}</select>
+      <label>Due date</label><input id="td-due" type="date" .value=${t && t.due ? t.due : ""} />
+      <label>Due time</label><input id="td-due-time" type="time" .value=${m.due_time || ""} />
+      <label>Priority (1 = highest, 5 = lowest)</label><input id="td-priority" type="number" min="1" max="5" .value=${m.priority || 3} />
+      <label>Time estimate (min)</label><input id="td-time" type="number" min="0" .value=${m.time_estimate != null ? m.time_estimate : ""} />
+      <label>Energy (1-5)</label><input id="td-energy" type="number" min="1" max="5" .value=${m.energy || 3} />
+      <label>Context</label><input id="td-context" type="text" placeholder="@home" .value=${m.context || ""} />
+      <label>Tags (comma separated)</label><input id="td-tags" type="text" placeholder="home, urgent" .value=${(m.tags || []).join(", ")} />
+      <label>Reminders (minutes before due, comma separated, e.g. 60, 1440)</label>
+      <input id="td-reminders" type="text" placeholder="60, 1440" .value=${m.reminders ? m.reminders.join(", ") : ""} />
+      <label>Repeat while overdue (minutes interval)</label><input id="td-overdue" type="number" min="1" .value=${m.overdue_repeat || ""} />
+      <label>Remind only in zone</label>
+      <select id="td-zone"><option value="">— no location condition —</option>
+        ${zones.map((z) => html`<option value=${z} ?selected=${loc && loc.zone === z}>${z}</option>`)}</select>
+      <label>Location mode</label>
+      <select id="td-locmode">
+        <option value="inside" ?selected=${!loc || loc.mode === "inside"}>when inside the zone</option>
+        <option value="outside" ?selected=${loc && loc.mode === "outside"}>when outside the zone</option>
+      </select>`;
   }
   _renderTaskDialog() {
     if (this._dlg !== "add" && this._dlg !== "edit") return "";
@@ -465,16 +854,25 @@ class GamifiedGTDTasksCard extends LitElement {
         <div class="btns">
           <button @click=${async () => {
             const q = (id) => this.shadowRoot.querySelector(id).value;
+            const zone = q("#td-zone");
             const data = {
               title: q("#td-title"),
+              notes: q("#td-notes"),
+              list: q("#td-list"),
+              project_id: q("#td-project") || undefined,
+              assigned_to: q("#td-assigned") || undefined,
               priority: Number(q("#td-priority")) || 3,
               due: q("#td-due") || undefined,
+              due_time: q("#td-due-time") || undefined,
               time_estimate: q("#td-time") ? Number(q("#td-time")) : undefined,
               energy: Number(q("#td-energy")) || 3,
               context: q("#td-context") || undefined,
+              tags: q("#td-tags") ? q("#td-tags").split(",").map((s) => s.trim()).filter(Boolean) : undefined,
+              reminders: q("#td-reminders") || undefined,
+              overdue_repeat: q("#td-overdue") ? Number(q("#td-overdue")) : undefined,
             };
+            if (zone) data.location = { zone, mode: q("#td-locmode") || "inside" };
             if (isAdd) {
-              data.list = this.config.list === "all" ? "inbox" : this.config.list;
               await svc(this.hass, "add_to_inbox", data);
             } else {
               await svc(this.hass, "update_task", { task_id: this._task.uid, ...data });
@@ -626,12 +1024,17 @@ defineCard("gamified-gtd-rewards", GamifiedGTDRewardsCard);
 
 /* ------------------------------------------------------------------ */
 
-// Register all five card types in HA's "add card" picker.
+// Register all ten card types in HA's "add card" picker.
 window.customCards = window.customCards || [];
 for (const c of [
-  { type: "gamified-gtd-stats", name: "Gamified GTD — Stats (Pip-Boy)", description: "Level, XP, HP, karma, caps, SPECIAL, skills, perks. Config: person." },
+  { type: "gamified-gtd-stats", name: "Gamified GTD — Stats (Pip-Boy top bar)", description: "HP, level/XP, caps, karma. Config: person." },
+  { type: "gamified-gtd-special", name: "Gamified GTD — S.P.E.C.I.A.L.", description: "The 7 SPECIAL attributes. Config: person." },
+  { type: "gamified-gtd-skills", name: "Gamified GTD — Skills", description: "The 13 skills with TAG! badges. Config: person." },
+  { type: "gamified-gtd-perks", name: "Gamified GTD — Perks", description: "Owned perks only. Config: person." },
+  { type: "gamified-gtd-levelup", name: "Gamified GTD — Level Up", description: "Allocate skill points / choose a perk. Config: person." },
+  { type: "gamified-gtd-goat", name: "Gamified GTD — G.O.A.T.", description: "Vault 101 aptitude test; sets the Tag! skills. Config: person." },
   { type: "gamified-gtd-quests", name: "Gamified GTD — Quest Log", description: "Projects as quests with progress. Config: title." },
-  { type: "gamified-gtd-tasks", name: "Gamified GTD — Tasks", description: "GTD lists with clarify dialog. Config: list, assigned, title." },
+  { type: "gamified-gtd-tasks", name: "Gamified GTD — Tasks", description: "GTD lists with full task form + clarify dialog. Config: list, assigned, title." },
   { type: "gamified-gtd-review", name: "Gamified GTD — Weekly Review", description: "Auto-checked review checklist. Config: person." },
   { type: "gamified-gtd-rewards", name: "Gamified GTD — Rewards", description: "Caps reward shop. Config: person." },
 ]) {

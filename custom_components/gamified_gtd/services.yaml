@@ -434,3 +434,43 @@ get_state:
       name: Person
       selector:
         text:
+
+move_task:
+  name: Move task
+  description: Move a task to another GTD list (inbox, next_actions, waiting_for, someday_maybe). Keeps project assignment and all metadata.
+  fields:
+    task_id:
+      name: Task id
+      required: true
+      selector:
+        text:
+    list:
+      name: Target list
+      required: true
+      selector:
+        select:
+          options:
+            - inbox
+            - next_actions
+            - waiting_for
+            - someday_maybe
+
+submit_goat:
+  name: Submit G.O.A.T.
+  description: Submit the G.O.A.T. answers (one 0-based answer index per question, 10 questions). Sets the 3 Tag! skills on the profile and fires gamified_gtd_goat_completed. Use the gamified-gtd-goat card for the interactive test.
+  response:
+    tags:
+      description: the 3 Tag! skills determined by the test (FNV skill ids)
+    job:
+      description: the vault job result (skill, name, comment)
+  fields:
+    person:
+      name: Person
+      selector:
+        text:
+    answers:
+      name: Answers (10 indices, 0-3 each, comma separated)
+      required: true
+      example: "0,2,1,0,3,0,1,2,3,0"
+      selector:
+        text:

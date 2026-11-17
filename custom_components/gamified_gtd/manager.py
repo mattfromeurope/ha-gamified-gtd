@@ -25,6 +25,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from . import gamification as g
+from .goat_data import goat_result
 from .const import (
     CONF_CONTEXTS,
     CONF_DEFAULT_ENERGY,
@@ -42,6 +43,7 @@ from .const import (
     DEFAULT_XP_BASE,
     DOMAIN,
     EVENT_DATA_UPDATED,
+    EVENT_GOAT_COMPLETED,
     EVENT_LEVEL_UP,
     EVENT_PERK_AVAILABLE,
     EVENT_PERK_CHOSEN,
@@ -61,6 +63,7 @@ from .const import (
     STORAGE_VERSION,
     TASK_DONE,
     TASK_OPEN,
+    TODO_LISTS,
 )
 
 
@@ -197,6 +200,7 @@ class GTDManager:
             "perk_choice_pending": False,
             "review_streak": 0,
             "last_review_completed": None,
+            "goat": None,  # G.O.A.T. result (answers/tags/job) once taken — see goat_data.py
             "created_at": _now_iso(),
         }
 
@@ -342,15 +346,49 @@ class GTDManager:
         await self._save()
         return {"task_id": task["id"], "list": task["list"]}
 
+    def _set_task_project(self, task: dict[str, Any], project_id: str | None) -> None:
+        """Assign/detach a task to/from a quest, keeping BOTH sides in sync:
+        project['task_ids'] (drives the x/y quest progress) and task['project_id']."""
+        old_id = task.get("project_id")
+        if old_id == project_id:
+            return
+        if old_id:
+            old_project = self.data["projects"].get(old_id)
+            if old_project and task["id"] in old_project["task_ids"]:
+                old_project["task_ids"].remove(task["id"])
+        if project_id:
+            project = self.data["projects"].get(project_id)
+            if project is None:
+                raise ValueError(f"Unknown project: {project_id}")
+            if project["status"] != PROJECT_ACTIVE:
+                project["status"] = PROJECT_ACTIVE  # reopen a finished quest
+                project["completed_at"] = None
+            if task["id"] not in project["task_ids"]:
+                project["task_ids"].append(task["id"])
+        task["project_id"] = project_id
+
+    async def move_task(self, call: ServiceCall) -> dict[str, Any]:
+        """Move a task to another GTD list (inbox / next_actions / waiting_for /
+        someday_maybe) — keeps project assignment and all metadata."""
+        task = self.get_task(call.data["task_id"])
+        new_list = call.data["list"]
+        if new_list not in TODO_LISTS:
+            raise ValueError(f"Unknown list: {new_list} (expected one of {sorted(TODO_LISTS)})")
+        task["list"] = new_list
+        await self._save()
+        return {"task_id": task["id"], "list": new_list}
+
     async def update_task(self, call: ServiceCall) -> dict[str, Any]:
         """Update any task field; only keys present in the call are changed."""
         task = self.get_task(call.data["task_id"])
+        if "project_id" in call.data:
+            # project changes go through the helper so quest progress stays correct
+            self._set_task_project(task, call.data["project_id"] or None)
         for key in (
             "title",
             "notes",
             "list",
             "context",
-            "project_id",
             "due",
             "due_time",
             "location",
@@ -558,6 +596,66 @@ class GTDManager:
             EVENT_PERK_CHOSEN, {"person": profile["person"], "perk": perk_id}
         )
         return {"person": profile["person"], "perk": perk_id, "perks": profile["perks"]}
+
+    # ------------------------------------------------------------------
+    # G.O.A.T. (character creation test -> Tag! skills)
+    # ------------------------------------------------------------------
+
+    async def async_goat_pending_hint(self) -> None:
+        """One-time persistent notification per profile that has no Tag! skills yet,
+        pointing to the G.O.A.T. card (the test is meant to be taken once at setup).
+        The `goat_prompted` flag makes sure it fires only once per profile."""
+        changed = False
+        for person, profile in self.data["profiles"].items():
+            if profile.get("tagged_skills") or profile.get("goat") or profile.get("goat_prompted"):
+                continue
+            profile["goat_prompted"] = True
+            changed = True
+            await self.hass.services.async_call(
+                "persistent_notification",
+                "create",
+                {
+                    "title": "Gamified GTD — G.O.A.T.",
+                    "message": (
+                        f"{person}: take the G.O.A.T. to set your 3 Tag! skills. Add the "
+                        "'Gamified GTD — G.O.A.T.' card (custom:gamified-gtd-goat) to any "
+                        f"dashboard with person: {person} and start the test."
+                    ),
+                    "notification_id": f"{DOMAIN}_goat_{person}",
+                },
+                blocking=False,
+            )
+        if changed:
+            await self._save()
+
+    async def submit_goat(self, call: ServiceCall) -> dict[str, Any]:
+        """Submit the G.O.A.T. answers (one 0-based answer index per question).
+
+        The result (3 Tag! skills + the vault "job") is computed by goat_data.goat_result
+        and stored on the profile; the tags apply immediately via effective_skills.
+        Returns the tags + job so the card can show the result screen.
+        """
+        profile = self._profile_from_call(call)
+        raw = call.data["answers"]
+        # Accept a list of ints or a comma/semicolon separated string (service UI).
+        if isinstance(raw, str):
+            raw = [v for v in raw.replace(";", ",").split(",") if v.strip()]
+        answers = [int(a) for a in raw]
+        result = goat_result(answers)  # raises ValueError on wrong count/index
+        profile["tagged_skills"] = result["tags"]
+        profile["goat"] = {
+            "answers": answers,
+            "counts": result["counts"],
+            "tags": result["tags"],
+            "job": result["job"],
+            "completed_at": _now_iso(),
+        }
+        await self._save()
+        self.hass.bus.async_fire(
+            EVENT_GOAT_COMPLETED,
+            {"person": profile["person"], "tags": result["tags"], "job": result["job"]},
+        )
+        return {"tags": result["tags"], "job": result["job"]}
 
     # ------------------------------------------------------------------
     # Projects / quests
