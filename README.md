@@ -31,7 +31,7 @@ screen is the Level-Up card:
 | `custom:gamified-gtd-perks` | `person` — **only the owned perks**, with name + description |
 | `custom:gamified-gtd-levelup` | `person` — allocate skill points / choose the pending perk (the level-up dialogs) |
 | `custom:gamified-gtd-goat` | `person` — the **G.O.A.T.** (Vault 101 aptitude test): 10 questions with slide images, result sets the 3 Tag! skills — see below |
-| `custom:gamified-gtd-quests` | `title` — quest log with progress, new/complete quest |
+| `custom:gamified-gtd-quests` | GUI-editable (`title`, `show_completed`) — Pip-Boy quest-log layout: left list of quests (with "Show completed" toggle at the bottom), right side quest metadata (progress, due, est. reward) + its tasks (open first, then dimmed completed); icon actions for complete/edit/delete quest and per-task checkbox/move/edit/delete |
 | `custom:gamified-gtd-tasks` | GUI-editable: `title`, `list` (`inbox`/`next_actions`/`waiting_for`/`someday_maybe`/`all`/`completed`), `assigned` (`all`/`me`/person), `show_completed`, `sort` (`created`/`due`/`priority`/`title`), `details` (which badges show directly on the row). Rows expand/collapse on click (checkbox only completes), icon buttons for Clarify (inbox)/move/edit/delete, **Clarify all** in the inbox header, full task form incl. location condition + a Completed checkbox in the edit dialog, overdue dates highlighted |
 | `custom:gamified-gtd-review` | `person` — auto-checked weekly review checklist |
 | `custom:gamified-gtd-rewards` | `person` — caps reward shop with add/edit/delete of rewards |
@@ -112,7 +112,8 @@ The original FNV icons are copyrighted and **not shipped**. Drop your own files 
 `gamified_gtd.add_to_inbox`, `clarify`, `complete_task`, `update_task`, `move_task`,
 `skip_task`, `remove_task`, `create_project`, `add_to_project`, `complete_project`,
 `allocate_skill_points`, `choose_perk`, `start_review`, `complete_review`, `redeem_reward`,
-`add_reward`, `update_reward`, `remove_reward`, `submit_goat`, `reset_profile`, `get_state` — see `custom_components/gamified_gtd/services.yaml`.
+`add_reward`, `update_reward`, `remove_reward`, `create_project`, `update_project`,
+`remove_project`, `submit_goat`, `reset_profile`, `get_state` — see `custom_components/gamified_gtd/services.yaml`.
 `update_task` also accepts `list` (move) and `project_id` (assign to quest).
 
 ### Character creation & reset

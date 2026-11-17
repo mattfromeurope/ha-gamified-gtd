@@ -202,6 +202,7 @@ Sneak, Speech, Survival, Unarmed.
 | `start_review` / `complete_review` | weekly review |
 | `redeem_reward` | spend caps on a reward |
 | `add_reward` / `update_reward` / `remove_reward` | manage the shop (custom rewards editable/deletable; id generated on add) |
+| `update_project` / `remove_project` | rename quest / change outcome+deadline / delete quest (tasks are kept and detached) |
 | `submit_goat` | G.O.A.T. answers (10 indices) → sets the 3 Tag! skills; returns tags + job |
 | `reset_profile` | reset ONLY the FNV character of a person (level/XP/SPECIAL/skills/perks/caps/GOAT) so character creation can be redone — tasks, quests, reviews, rewards, karma untouched; fires `profile_reset`, re-arms the pending hint |
 | `get_state` | full profile as response (automations, voice, LLM) |

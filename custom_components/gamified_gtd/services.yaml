@@ -459,6 +459,38 @@ remove_reward:
       selector:
         text:
 
+update_project:
+  name: Update quest
+  description: Rename a quest (project) and/or change its desired outcome or deadline. Only the given fields are changed.
+  fields:
+    project_id:
+      name: Quest id
+      required: true
+      selector:
+        text:
+    name:
+      name: Name
+      selector:
+        text:
+    desired_outcome:
+      name: Desired outcome
+      selector:
+        text:
+    due:
+      name: Deadline
+      selector:
+        date:
+
+remove_project:
+  name: Remove quest
+  description: Delete a quest (project). Its tasks are kept and detached (project_id cleared).
+  fields:
+    project_id:
+      name: Quest id
+      required: true
+      selector:
+        text:
+
 get_state:
   name: Get state
   description: Return the full FNV profile (level, xp, karma, caps, SPECIAL, skills, perks, quests) as response.

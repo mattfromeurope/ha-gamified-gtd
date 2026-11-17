@@ -276,3 +276,62 @@ def test_save_fires_refresh_event_immediately_and_debounces_disk_write():
     mgr.hass.bus.async_fire.assert_called_once_with(EVENT_DATA_UPDATED, {"entry_id": "e1"})
     mgr._store.async_delay_save.assert_called_once()
     mgr._store.async_save.assert_not_called()
+
+
+def test_clarify_project_syncs_task_ids():
+    """Regression: clarify(decision=project) used to set task['project_id'] directly,
+    so the quest's task_ids (which drive the x/y progress) missed the step."""
+    mgr = _manager()
+    task = mgr._new_task("Step 1", {"list": "inbox"})
+    mgr.data["tasks"][task["id"]] = task
+    pid = mgr._create_project("Quest", "outcome", None)
+    asyncio.run(mgr.clarify(_call("clarify", {"task_id": task["id"], "decision": "project", "project_id": pid})))
+    assert task["project_id"] == pid
+    assert task["id"] in mgr.data["projects"][pid]["task_ids"]
+    assert mgr.quest_progress(mgr.data["projects"][pid]) == (0, 1)
+
+
+def test_add_to_inbox_with_project_id_syncs_task_ids():
+    """Regression: add_to_inbox with project_id used to skip _set_task_project, so the
+    quest progress undercounted the step (user saw '2 open tasks, only 1 recognized')."""
+    mgr = _manager()
+    pid = mgr._create_project("Quest", "outcome", None)
+    r1 = asyncio.run(mgr.add_to_inbox(_call("add_to_inbox", {"title": "A", "project_id": pid})))
+    r2 = asyncio.run(mgr.add_to_inbox(_call("add_to_inbox", {"title": "B", "project_id": pid})))
+    assert mgr.data["projects"][pid]["task_ids"] == [r1["task_id"], r2["task_id"]]
+    assert mgr.quest_progress(mgr.data["projects"][pid]) == (0, 2)
+
+
+def test_repair_project_links_on_load():
+    """Older data could have task['project_id'] set without the task in task_ids."""
+    mgr = _manager()
+    pid = mgr._create_project("Quest", "outcome", None)
+    t1 = mgr._new_task("A", {"list": "inbox"})
+    t1["project_id"] = pid  # simulate old inconsistent data: not in task_ids
+    mgr.data["tasks"][t1["id"]] = t1
+    mgr.data["projects"][pid]["task_ids"] = ["stale-id"]
+    mgr._repair_project_links()
+    assert mgr.data["projects"][pid]["task_ids"] == [t1["id"]]
+    assert mgr.quest_progress(mgr.data["projects"][pid]) == (0, 1)
+
+
+def test_update_and_remove_project():
+    mgr = _manager()
+    pid = mgr._create_project("Old name", "outcome", None)
+    t = mgr._new_task("A", {"list": "inbox"})
+    mgr.data["tasks"][t["id"]] = t
+    mgr._set_task_project(t, pid)
+    # update
+    res = asyncio.run(mgr.update_project(_call("update_project", {"project_id": pid, "name": "New name", "due": "2025-12-24"})))
+    assert res["name"] == "New name"
+    assert mgr.data["projects"][pid]["name"] == "New name"
+    assert mgr.data["projects"][pid]["due"] == "2025-12-24"
+    with pytest.raises(ValueError, match="empty"):
+        asyncio.run(mgr.update_project(_call("update_project", {"project_id": pid, "name": " "})))
+    with pytest.raises(ValueError, match="Unknown project"):
+        asyncio.run(mgr.update_project(_call("update_project", {"project_id": "nope", "name": "x"})))
+    # remove: quest deleted, task kept and detached
+    res = asyncio.run(mgr.remove_project(_call("remove_project", {"project_id": pid})))
+    assert res["removed"] == pid
+    assert pid not in mgr.data["projects"]
+    assert t["project_id"] is None and t["id"] in mgr.data["tasks"]
