@@ -19,10 +19,11 @@ gamified_gtd_icons/
                           questionnaire (FO3_GOAT_slide_<n>.jpg)
 ```
 
-Lookup order per icon: `<id>.png` (your drop-in) → `<id>.svg` (shipped placeholder) →
-`placeholder.svg` (shipped generic, if present for that kind) → text glyph.
-
-Served at `/gamified_gtd_static/gamified_gtd_icons/...`.
+Lookup order per icon: `<id>.png` (your drop-in) → **embedded placeholder** (the shipped
+Vault-Boy-style SVGs below are compiled into `www/gamified-gtd-placeholders.js` as data
+URIs by `scripts/build_placeholders.sh`, so the fallback works even without an HTTP
+round-trip) → text glyph. The `.svg` files here are the generator source and are also
+served at `/gamified_gtd_static/gamified_gtd_icons/...`.
 
 **Note:** The original Fallout: New Vegas icons are copyrighted by Bethesda/ZeniMax
 and are therefore **not shipped** with this integration. If you own the game, you may
