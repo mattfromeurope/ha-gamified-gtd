@@ -7,9 +7,10 @@ items explicitly in extra_state_attributes, together with the per-task metadata
 under `tasks`.
 """
 
+import asyncio
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -85,3 +86,34 @@ def test_tasks_metadata_keyed_by_uid_with_all_form_fields():
     assert meta["location"] == {"zone": "zone.home", "mode": "inside"}
     assert meta["reminders"] == [60, 1440]
     assert "t2" not in ent.extra_state_attributes["tasks"]
+
+
+def test_todo_write_through_servicecall_carries_data():
+    """Regression: ServiceCall's first argument is hass (since HA 2024.x). With the old
+    positional ServiceCall(domain, service, data) the data dict ended up empty, so the
+    manager's write-through (add/complete/remove from the HA todo card) raised KeyError."""
+    from homeassistant.components.todo import TodoItem, TodoItemStatus
+
+    mgr = _manager()
+    mgr.add_to_inbox = AsyncMock()
+    mgr.complete_task = AsyncMock()
+    mgr.remove_task = AsyncMock()
+    ent = GTDTodoListEntity(mgr, "inbox", "GTD Inbox")
+    ent.hass = MagicMock()
+
+    item = TodoItem(summary="From HA todo card", status=TodoItemStatus.NEEDS_ACTION)
+    asyncio.run(ent.async_create_todo_item(item))
+    call = mgr.add_to_inbox.call_args[0][0]
+    assert call.domain == "gamified_gtd"
+    assert call.service == "add_to_inbox"
+    assert call.data["title"] == "From HA todo card"
+    assert call.data["list"] == "inbox"
+
+    done = TodoItem(uid="t1", summary="x", status=TodoItemStatus.COMPLETED)
+    asyncio.run(ent.async_update_todo_item(done))
+    call2 = mgr.complete_task.call_args[0][0]
+    assert call2.data["task_id"] == "t1"
+
+    asyncio.run(ent.async_delete_todo_items(["t1"]))
+    call3 = mgr.remove_task.call_args[0][0]
+    assert call3.data["task_id"] == "t1"
