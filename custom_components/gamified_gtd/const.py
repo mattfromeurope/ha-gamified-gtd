@@ -97,6 +97,8 @@ SERVICE_START_REVIEW = "start_review"
 SERVICE_COMPLETE_REVIEW = "complete_review"
 SERVICE_REDEEM_REWARD = "redeem_reward"
 SERVICE_GET_STATE = "get_state"
+SERVICE_MOVE_TASK = "move_task"
+SERVICE_SUBMIT_GOAT = "submit_goat"
 
 # Shared payload keys
 SERVICE_PERSON = "person"
@@ -122,6 +124,7 @@ EVENT_REVIEW_COMPLETED = f"{DOMAIN}_review_completed"
 EVENT_REWARD_REDEEMED = f"{DOMAIN}_reward_redeemed"
 EVENT_REMINDER_SENT = f"{DOMAIN}_reminder_sent"
 EVENT_SUMMARY_SENT = f"{DOMAIN}_summary_sent"
+EVENT_GOAT_COMPLETED = f"{DOMAIN}_goat_completed"
 
 # ---------------------------------------------------------------------------
 # Notification options
@@ -154,3 +157,20 @@ REVIEW_CHECKLIST = [
     "calendar_checked",
     "someday_reviewed",
 ]
+
+# ---------------------------------------------------------------------------
+# FNV character creation (SPECIAL allocator) and the G.O.A.T.
+# ---------------------------------------------------------------------------
+# SPECIAL allocation like in Fallout: New Vegas character creation: every attribute
+# starts at SPECIAL_BASE (5) and SPECIAL_FREE_POINTS (5) points are distributed
+# freely — values may be raised AND lowered, but must stay within SPECIAL_MIN..MAX.
+# The total is therefore always SPECIAL_BASE * 7 + SPECIAL_FREE_POINTS = 40.
+SPECIAL_BASE = 5
+SPECIAL_FREE_POINTS = 5
+SPECIAL_MIN = 1
+SPECIAL_MAX = 10
+SPECIAL_TOTAL_POINTS = SPECIAL_BASE * 7 + SPECIAL_FREE_POINTS  # 40
+
+# The G.O.A.T. (Fallout 3) determines the Tag! skills at setup — see goat_data.py.
+# Slide images are user drop-ins: www/gamified_gtd_icons/goat/slide_<n>.png
+GOAT_SLIDE_COUNT = 10  # 10 slides (questions), slide 10 is the joke question

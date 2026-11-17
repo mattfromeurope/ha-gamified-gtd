@@ -109,6 +109,7 @@ class LevelSensor(GTDProfileSensor):
             "days_since_review": self._days_since_review(),
             "review_checklist": self._manager.review_checklist_state(),
             "review_streak": self.profile.get("review_streak", 0),
+            "goat": self.profile.get("goat"),  # G.O.A.T. result (null until taken)
         }
 
     def _days_since_review(self) -> int | None:
@@ -184,7 +185,11 @@ class SkillsSensor(GTDProfileSensor):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        return self._manager.effective_skills(self.profile)
+        """The 13 skills plus the Tag! skills (shown as TAG! badge on the skills card)."""
+        return {
+            **self._manager.effective_skills(self.profile),
+            "tagged_skills": list(self.profile.get("tagged_skills", [])),
+        }
 
 
 class PerksSensor(GTDProfileSensor):
@@ -199,10 +204,21 @@ class PerksSensor(GTDProfileSensor):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
+        """Owned perks: ids, names and full details (id/name/description) for the
+        perks card — only the perks the player actually has are listed."""
         perks = list(self.profile["perks"])
         return {
             "perks": perks,
             "perk_names": {pid: g.PERKS_BY_ID[pid].name for pid in perks if pid in g.PERKS_BY_ID},
+            "perk_details": [
+                {
+                    "id": pid,
+                    "name": g.PERKS_BY_ID[pid].name,
+                    "description": g.PERKS_BY_ID[pid].description,
+                }
+                for pid in perks
+                if pid in g.PERKS_BY_ID
+            ],
         }
 
 

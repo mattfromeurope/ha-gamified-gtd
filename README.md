@@ -11,20 +11,42 @@ The full, agreed design lives in [DESIGN.md](DESIGN.md).
 
 ## Status
 
-Backend (config flow, storage, `todo` entities, sensors, services, events) and the five
+Backend (config flow, storage, `todo` entities, sensors, services, events) and the ten
 Pip-Boy-style custom cards are in place.
 
 ## Custom cards
 
-Auto-registered by the integration (hard-refresh the browser once after an update):
+Auto-registered by the integration (hard-refresh the browser once after an update).
+The profile cards follow the Pip-Boy 3000 layout from the game (display only, no
+Add/Edit/Delete buttons); the interactive character screen is the Level-Up card:
 
 | Card type | Config |
 |---|---|
-| `custom:gamified-gtd-stats` | `person: person.alex` (+ `title`) — level/XP bar, HP, karma, caps, SPECIAL, skills, perks; dialogs for skill points and perk choice |
+| `custom:gamified-gtd-stats` | `person` (+ `title`) — Pip-Boy **top bar**: HP, LEVEL + XP bar, CAPS, plus the karma row |
+| `custom:gamified-gtd-special` | `person` — the 7 S.P.E.C.I.A.L. attributes with bars, like the STATS page |
+| `custom:gamified-gtd-skills` | `person` — the 13 skills with bars; Tag! skills carry a `TAG!` badge |
+| `custom:gamified-gtd-perks` | `person` — **only the owned perks**, with name + description |
+| `custom:gamified-gtd-levelup` | `person` — allocate skill points / choose the pending perk (the level-up dialogs) |
+| `custom:gamified-gtd-goat` | `person` — the **G.O.A.T.** (Vault 101 aptitude test): 10 questions with slide images, result sets the 3 Tag! skills — see below |
 | `custom:gamified-gtd-quests` | `title` — quest log with progress, new/complete quest |
-| `custom:gamified-gtd-tasks` | `list` (`inbox`/`next_actions`/`waiting_for`/`someday_maybe`/`all`), `assigned` (`all`/`me`/person), `show_completed` — incl. Clarify dialog for the inbox |
+| `custom:gamified-gtd-tasks` | `list` (`inbox`/`next_actions`/`waiting_for`/`someday_maybe`/`all`), `assigned` (`all`/`me`/person), `show_completed` — full task form (title, notes, list, project, assigned, due date+time, priority, time estimate, energy, context, tags, reminders, overdue repeat, location condition), per-row **move-to-list** select, Clarify dialog for the inbox |
 | `custom:gamified-gtd-review` | `person` — auto-checked weekly review checklist |
 | `custom:gamified-gtd-rewards` | `person` — caps reward shop |
+
+### Character creation: SPECIAL + G.O.A.T.
+
+- In the options flow (**Configure → S.P.E.C.I.A.L.**) each attribute starts at **5** and
+  you freely distribute **5 more points** (raise or lower, 1–10 each; the total must be
+  exactly 40) — like character creation in FNV.
+- Instead of picking Tag! skills manually, take the **G.O.A.T.**: add the
+  `custom:gamified-gtd-goat` card to a dashboard once at setup, answer the 10 questions
+  and the result (3 Tag! skills + the vault "job") is applied via
+  `gamified_gtd.submit_goat` and stored on the profile (`sensor.<name>_level` attribute
+  `goat`). The slide images from Fallout 3 are **not shipped** (copyright) — drop them
+  into `www/gamified_gtd_icons/goat/slide_<n>.png` (links are in the questionnaire, see
+  DESIGN.md); without images the card shows a text fallback.
+- Tasks can be moved between the four GTD lists at any time (`gamified_gtd.move_task`)
+  and assigned to a quest in the task form (`project_id`) or via `add_to_project`.
 
 All card actions only call the `gamified_gtd.*` services / read sensors — everything works
 without the cards via HA built-ins (todo card, developer tools, automations).
@@ -52,7 +74,7 @@ URLs, which HA's `index.html` imports on every page load. If a card shows
 
 The original FNV icons are copyrighted and **not shipped**. Drop your own files into
 `custom_components/gamified_gtd/www/gamified_gtd_icons/<kind>/<id>.png` (`special`, `skill`,
-`perk`, `quest`) — see the README in that folder. The cards fall back to text glyphs.
+`perk`, `quest`, `goat`) — see the README in that folder. The cards fall back to text glyphs.
 
 ## Installation
 
@@ -71,10 +93,11 @@ The original FNV icons are copyrighted and **not shipped**. Drop your own files 
 
 ## Services
 
-`gamified_gtd.add_to_inbox`, `clarify`, `complete_task`, `update_task`, `skip_task`,
-`remove_task`, `create_project`, `add_to_project`, `complete_project`,
+`gamified_gtd.add_to_inbox`, `clarify`, `complete_task`, `update_task`, `move_task`,
+`skip_task`, `remove_task`, `create_project`, `add_to_project`, `complete_project`,
 `allocate_skill_points`, `choose_perk`, `start_review`, `complete_review`, `redeem_reward`,
-`get_state` — see `custom_components/gamified_gtd/services.yaml`.
+`submit_goat`, `get_state` — see `custom_components/gamified_gtd/services.yaml`.
+`update_task` also accepts `list` (move) and `project_id` (assign to quest).
 
 ## Notifications
 
@@ -107,4 +130,4 @@ ready-to-read `speech` lines), `add_task`, `complete_task`, `clarify_task`, `get
 
 `gamified_gtd_task_completed`, `gamified_gtd_level_up`, `gamified_gtd_perk_available`,
 `gamified_gtd_perk_chosen`, `gamified_gtd_quest_completed`, `gamified_gtd_review_completed`,
-`gamified_gtd_reward_redeemed`.
+`gamified_gtd_reward_redeemed`, `gamified_gtd_goat_completed`.

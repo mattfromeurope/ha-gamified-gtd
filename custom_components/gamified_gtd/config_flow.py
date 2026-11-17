@@ -23,6 +23,11 @@ from homeassistant.helpers import selector
 from . import gamification as g
 from .const import (
     CONF_CONTEXTS,
+    SPECIAL_BASE,
+    SPECIAL_FREE_POINTS,
+    SPECIAL_MAX,
+    SPECIAL_MIN,
+    SPECIAL_TOTAL_POINTS,
     CONF_DEFAULT_ENERGY,
     CONF_DEFAULT_PROFILE,
     CONF_DEFAULT_TIME_ESTIMATE,
@@ -51,6 +56,21 @@ def _person_options(hass) -> list[selector.SelectOptionDict]:
         selector.SelectOptionDict(value=state.entity_id, label=state.entity_id)
         for state in sorted(hass.states.async_all("person"), key=lambda s: s.entity_id)
     ]
+
+
+def _validate_special(value: dict[str, Any]) -> dict[str, Any]:
+    """FNV character-creation rule for the SPECIAL allocator: every attribute is
+    1-10, starts at 5, and exactly 5 additional points are distributed freely —
+    values may be raised AND lowered, but the total must always be 40."""
+    total = sum(int(value.get(stat, SPECIAL_BASE)) for stat in g.SPECIAL_STATS)
+    if total != SPECIAL_TOTAL_POINTS:
+        raise vol.Invalid(
+            f"SPECIAL must total exactly {SPECIAL_TOTAL_POINTS} points "
+            f"(each of the 7 attributes starts at {SPECIAL_BASE} and you distribute "
+            f"{SPECIAL_FREE_POINTS} more points freely, {SPECIAL_MIN}-{SPECIAL_MAX} each) — "
+            f"got {total}"
+        )
+    return value
 
 
 def _base_schema(hass, defaults: dict[str, Any] | None = None) -> vol.Schema:
@@ -208,18 +228,24 @@ class GamifiedGDTOptionsFlow(OptionsFlow):
     async def async_step_special(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Step 4: allocate the 7 SPECIAL attributes (1-10 each), like FNV character
-        creation."""
+        """Step 4: allocate the 7 SPECIAL attributes like FNV character creation —
+        each starts at 5, 5 points are freely distributed (raise or lower, 1-10),
+        so the total must be exactly 40 (enforced by _validate_special)."""
         if user_input is not None:
-            self._special = user_input
-            return await self.async_step_tags()
-        schema = vol.Schema(
-            {
-                vol.Required(stat, default=5): vol.All(
-                    vol.Coerce(int), vol.Range(min=1, max=10)
-                )
-                for stat in g.SPECIAL_STATS
+            self._special = {
+                stat: int(user_input.get(stat, SPECIAL_BASE)) for stat in g.SPECIAL_STATS
             }
+            return await self.async_step_tags()
+        schema = vol.All(
+            vol.Schema(
+                {
+                    vol.Required(stat, default=SPECIAL_BASE): vol.All(
+                        vol.Coerce(int), vol.Range(min=SPECIAL_MIN, max=SPECIAL_MAX)
+                    )
+                    for stat in g.SPECIAL_STATS
+                }
+            ),
+            _validate_special,
         )
         return self.async_show_form(step_id="special", data_schema=schema)
 

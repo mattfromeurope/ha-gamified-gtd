@@ -38,7 +38,7 @@
       },
       "special": {
         "title": "S.P.E.C.I.A.L.",
-        "description": "Allocate the SPECIAL attributes (1-10 each), like character creation in Fallout: New Vegas.",
+        "description": "Like character creation in Fallout: New Vegas: every attribute starts at 5 and you freely distribute 5 more points — you may raise or lower values (1-10 each); the total must be exactly 40.",
         "data": {
           "strength": "Strength",
           "perception": "Perception",
@@ -51,7 +51,7 @@
       },
       "tags": {
         "title": "Tag! skills",
-        "description": "Choose 3 Tag! skills (+15 each).",
+        "description": "Choose 3 Tag! skills (+15 each) — or leave this and take the G.O.A.T. instead: add the 'Gamified GTD — G.O.A.T.' card (custom:gamified-gtd-goat) to a dashboard and the test determines your Tag! skills automatically.",
         "data": {
           "tagged_skills": "Tag! skills"
         }

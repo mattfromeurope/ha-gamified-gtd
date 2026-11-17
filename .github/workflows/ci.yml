@@ -34,7 +34,7 @@ jobs:
       - name: Install pytest
         run: pip install pytest
       - name: Run tests
-        run: python -m pytest tests/test_gamification.py tests/test_frontend_assets.py -q
+        run: python -m pytest tests/test_gamification.py tests/test_goat.py tests/test_frontend_assets.py -q
 
   # Smoke test: import all integration modules with a real Home Assistant install,
   # so import errors (e.g. circular imports) that break the config flow are caught.
@@ -49,7 +49,7 @@ jobs:
       - name: Install homeassistant + pytest
         run: pip install homeassistant pytest
       - name: Run import smoke + setup tests
-        run: python -m pytest tests/test_imports.py tests/test_setup.py -q
+        run: python -m pytest tests/test_imports.py tests/test_setup.py tests/test_todo.py -q
 
   # Frontend: syntax-check the custom card module (ES module -> node --check).
   frontend:

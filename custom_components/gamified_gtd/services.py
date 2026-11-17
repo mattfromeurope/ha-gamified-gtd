@@ -1,6 +1,6 @@
 """Service registrations for Gamified GTD.
 
-All 15 services of the `gamified_gtd` domain are registered once (guarded by
+All 17 services of the `gamified_gtd` domain are registered once (guarded by
 `hass.services.has_service`) and delegate to the manager of the first config entry.
 Each registration carries a voluptuous schema so the HA UI shows proper form fields;
 the human-readable descriptions live in services.yaml.
@@ -26,12 +26,16 @@ from .const import (
     SERVICE_COMPLETE_TASK,
     SERVICE_CREATE_PROJECT,
     SERVICE_GET_STATE,
+    SERVICE_MOVE_TASK,
     SERVICE_REDEEM_REWARD,
     SERVICE_REMOVE_TASK,
     SERVICE_SKIP_TASK,
     SERVICE_START_REVIEW,
+    SERVICE_SUBMIT_GOAT,
     SERVICE_UPDATE_TASK,
+    TODO_LISTS,
 )
+from .goat_data import QUESTIONS
 from .manager import get_manager
 
 # Shared field block: every task-addressing service takes a task_id.
@@ -147,6 +151,30 @@ REDEEM_REWARD_SCHEMA = vol.Schema(
     }
 )
 
+# move_task: move a task to another GTD list (keeps project assignment + metadata).
+MOVE_TASK_SCHEMA = vol.Schema(
+    {
+        **TASK_FIELDS,
+        vol.Required("list"): vol.In(list(TODO_LISTS)),
+    }
+)
+
+# submit_goat: G.O.A.T. answers — one 0-based answer index per question (10 questions).
+# Accepted as a list of ints OR as a comma separated string ("0,2,1,...") — the
+# manager normalizes both (the service UI only offers a text field).
+SUBMIT_GOAT_SCHEMA = vol.Schema(
+    {
+        vol.Optional("person"): cv.string,
+        vol.Required("answers"): vol.Any(
+            vol.All(
+                [vol.All(vol.Coerce(int), vol.Range(min=0, max=3))],
+                vol.Length(min=len(QUESTIONS), max=len(QUESTIONS)),
+            ),
+            cv.string,
+        ),
+    }
+)
+
 # person-only services (start/complete review, get_state).
 PERSON_ONLY_SCHEMA = vol.Schema({vol.Optional("person"): cv.string})
 
@@ -240,6 +268,22 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         supports_response=SupportsResponse.ONLY,
     )
 
+    async def handle_move(call: ServiceCall) -> None:
+        await get_manager(hass).move_task(call)
+
+    hass.services.async_register(DOMAIN, SERVICE_MOVE_TASK, handle_move, schema=MOVE_TASK_SCHEMA)
+
+    async def handle_goat(call: ServiceCall) -> dict:
+        return await get_manager(hass).submit_goat(call)
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SUBMIT_GOAT,
+        handle_goat,
+        schema=SUBMIT_GOAT_SCHEMA,
+        supports_response=SupportsResponse.ONLY,
+    )
+
 
 async def async_unload_services(hass: HomeAssistant) -> None:
     """Remove all gamified_gtd services (when the last config entry is unloaded)."""
@@ -259,6 +303,8 @@ async def async_unload_services(hass: HomeAssistant) -> None:
         SERVICE_COMPLETE_REVIEW,
         SERVICE_REDEEM_REWARD,
         SERVICE_GET_STATE,
+        SERVICE_MOVE_TASK,
+        SERVICE_SUBMIT_GOAT,
     ):
         if hass.services.has_service(DOMAIN, service):
             hass.services.async_remove(DOMAIN, service)

@@ -10,6 +10,10 @@ gamified_gtd_icons/
                           melee_weapons, repair, science, sneak, speech, survival, unarmed
   perk/<perk_id>.png      e.g. swift_learner.png, intense_training.png, educated.png
   quest/<project_id>.png  optional per-quest icon
+  goat/slide_<n>.png      G.O.A.T. slides (Fallout 3), slide_1.png … slide_10.png —
+                          shown on the gamified-gtd-goat card during the test;
+                          sources: the Fallout Wiki links in DESIGN.md / the GOAT
+                          questionnaire (FO3_GOAT_slide_<n>.jpg)
 ```
 
 Served at `/gamified_gtd_static/gamified_gtd_icons/...`.
