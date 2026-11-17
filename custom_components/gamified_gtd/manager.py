@@ -154,6 +154,7 @@ class GTDManager:
         else:
             self.data = stored
         self._ensure_profiles()
+        self._repair_project_links()
         await self._save()
 
     def _initial_data(self) -> dict[str, Any]:
@@ -187,6 +188,25 @@ class GTDManager:
                     goat = dict(setup["goat"])
                     goat.setdefault("completed_at", _now_iso())
                     profile["goat"] = goat
+
+    def _repair_project_links(self) -> None:
+        """Make task <-> project links consistent in BOTH directions. Older data could
+        have task['project_id'] set without the task being listed in
+        project['task_ids'] (clarify/add_to_inbox used to assign directly), which made
+        quest_progress (x/y) undercount steps."""
+        for task in self.data["tasks"].values():
+            pid = task.get("project_id")
+            if not pid:
+                continue
+            project = self.data["projects"].get(pid)
+            if project is None:
+                task["project_id"] = None
+            elif task["id"] not in project["task_ids"]:
+                project["task_ids"].append(task["id"])
+        for project in self.data["projects"].values():
+            project["task_ids"] = [
+                tid for tid in project["task_ids"] if tid in self.data["tasks"]
+            ]
 
     def _new_profile(self, person: str) -> dict[str, Any]:
         """Fresh FNV profile: all SPECIAL at 5, no XP/level/karma/caps/perks yet."""
@@ -324,6 +344,12 @@ class GTDManager:
             call.data["title"], {**call.data, "list": call.data.get("list", LIST_INBOX)}
         )
         self.data["tasks"][task["id"]] = task
+        # Keep the quest side in sync when the task is created WITH a project_id —
+        # otherwise project['task_ids'] misses it and quest_progress (x/y) undercounts.
+        pid = task.get("project_id")
+        if pid:
+            task["project_id"] = None
+            self._set_task_project(task, pid)
         await self._save()
         return {"task_id": task["id"]}
 
@@ -352,7 +378,9 @@ class GTDManager:
                     None,
                 )
             task["list"] = LIST_NEXT_ACTIONS
-            task["project_id"] = project_id
+            # route through the helper so project['task_ids'] stays in sync
+            # (drives the x/y quest progress) — direct assignment undercounted steps
+            self._set_task_project(task, project_id)
         else:
             raise ValueError(f"Unknown clarify decision: {decision}")
         if call.data.get("context"):
@@ -829,6 +857,38 @@ class GTDManager:
         open_steps = [t for t in steps if t and t["status"] != TASK_DONE]
         if steps and not open_steps:
             await self._complete_project(project, automatic=True)
+
+    async def update_project(self, call: ServiceCall) -> dict[str, Any]:
+        """Service `update_project`: rename a quest and/or change its desired outcome
+        or deadline. Only the given fields are changed."""
+        project = self.data["projects"].get(call.data["project_id"])
+        if project is None:
+            raise ValueError(f"Unknown project: {call.data['project_id']}")
+        if "name" in call.data:
+            name = str(call.data["name"]).strip()
+            if not name:
+                raise ValueError("name must not be empty")
+            project["name"] = name
+        if "desired_outcome" in call.data:
+            project["desired_outcome"] = str(call.data["desired_outcome"] or "")
+        if "due" in call.data:
+            project["due"] = call.data["due"] or None
+        await self._save()
+        return {"project_id": project["id"], "name": project["name"]}
+
+    async def remove_project(self, call: ServiceCall) -> dict[str, Any]:
+        """Service `remove_project`: delete a quest. Its tasks are kept and detached
+        (project_id cleared) so nothing is lost."""
+        project = self.data["projects"].get(call.data["project_id"])
+        if project is None:
+            raise ValueError(f"Unknown project: {call.data['project_id']}")
+        for tid in list(project["task_ids"]):
+            task = self.data["tasks"].get(tid)
+            if task is not None:
+                task["project_id"] = None
+        del self.data["projects"][project["id"]]
+        await self._save()
+        return {"removed": project["id"]}
 
     async def complete_project(self, call: ServiceCall) -> dict[str, Any]:
         """Service: complete a quest manually (even with open steps)."""

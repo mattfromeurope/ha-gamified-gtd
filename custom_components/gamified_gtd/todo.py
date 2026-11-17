@@ -113,6 +113,7 @@ class GTDTodoListEntity(TodoListEntity):
                 "energy": task.get("energy"),
                 "tags": task.get("tags", []),
                 "status": task["status"],
+                "xp_awarded": task.get("xp_awarded"),  # for the quest card's reward estimate
                 # notification fields so the edit form can prefill them
                 "due_time": task.get("due_time"),
                 "reminders": task.get("reminders", []),

@@ -29,12 +29,14 @@ from .const import (
     SERVICE_GET_STATE,
     SERVICE_MOVE_TASK,
     SERVICE_REDEEM_REWARD,
+    SERVICE_REMOVE_PROJECT,
     SERVICE_REMOVE_REWARD,
     SERVICE_REMOVE_TASK,
     SERVICE_RESET_PROFILE,
     SERVICE_SKIP_TASK,
     SERVICE_START_REVIEW,
     SERVICE_SUBMIT_GOAT,
+    SERVICE_UPDATE_PROJECT,
     SERVICE_UPDATE_REWARD,
     SERVICE_UPDATE_TASK,
     TODO_LISTS,
@@ -199,6 +201,17 @@ SUBMIT_GOAT_SCHEMA = vol.Schema(
 )
 
 # person-only services (start/complete review, get_state).
+# update_project / remove_project: manage a quest (rename, outcome, deadline / delete).
+UPDATE_PROJECT_SCHEMA = vol.Schema(
+    {
+        vol.Required("project_id"): cv.string,
+        vol.Optional("name"): cv.string,
+        vol.Optional("desired_outcome"): cv.string,
+        vol.Optional("due"): cv.string,
+    }
+)
+REMOVE_PROJECT_SCHEMA = vol.Schema({vol.Required("project_id"): cv.string})
+
 PERSON_ONLY_SCHEMA = vol.Schema({vol.Optional("person"): cv.string})
 
 
@@ -252,6 +265,20 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         await get_manager(hass).complete_project(call)
 
     hass.services.async_register(DOMAIN, SERVICE_COMPLETE_PROJECT, handle_complete_project, schema=vol.Schema({vol.Required("project_id"): cv.string}))
+
+    async def handle_update_project(call: ServiceCall) -> None:
+        await get_manager(hass).update_project(call)
+
+    hass.services.async_register(
+        DOMAIN, SERVICE_UPDATE_PROJECT, handle_update_project, schema=UPDATE_PROJECT_SCHEMA
+    )
+
+    async def handle_remove_project(call: ServiceCall) -> None:
+        await get_manager(hass).remove_project(call)
+
+    hass.services.async_register(
+        DOMAIN, SERVICE_REMOVE_PROJECT, handle_remove_project, schema=REMOVE_PROJECT_SCHEMA
+    )
 
     async def handle_allocate(call: ServiceCall) -> None:
         await get_manager(hass).allocate_skill_points(call)
@@ -367,6 +394,8 @@ async def async_unload_services(hass: HomeAssistant) -> None:
         SERVICE_CREATE_PROJECT,
         SERVICE_ADD_TO_PROJECT,
         SERVICE_COMPLETE_PROJECT,
+        SERVICE_UPDATE_PROJECT,
+        SERVICE_REMOVE_PROJECT,
         SERVICE_ALLOCATE_SKILL_POINTS,
         SERVICE_CHOOSE_PERK,
         SERVICE_START_REVIEW,

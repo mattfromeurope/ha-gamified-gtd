@@ -294,6 +294,13 @@ const cardCss = css`
     color: var(--secondary-text-color); font-size: 0.85em; line-height: 1.5;
     border-top: 1px solid var(--divider-color); padding-top: 8px;
   }
+  /* Quest log (Pip-Boy layout): left ~1/3 = quest list, right ~2/3 = meta + tasks. */
+  .qsplit .alist { width: 33%; min-width: 180px; }
+  .arow.qdone { opacity: 0.55; }
+  .arow.qdone .nm { text-decoration: line-through; }
+  .qdetail { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+  .qmeta { border-bottom: 1px solid var(--divider-color); padding-bottom: 8px; }
+  .qtasks { overflow-y: auto; max-height: 320px; }
   /* G.O.A.T. card */
   .goat-slide { display: flex; justify-content: center; margin: 8px 0; }
   .goat-q { font-size: 0.95em; line-height: 1.4; margin: 8px 0; }
@@ -769,68 +776,258 @@ class GamifiedGTDGoatCard extends LitElement {
 defineCard("gamified-gtd-goat", GamifiedGTDGoatCard);
 
 /* ------------------------------------------------------------------ */
-/* Quests card                                                         */
+/* Quests card — Pip-Boy quest-log layout + GUI config editor          */
 /* ------------------------------------------------------------------ */
 
+// XP estimate factors — mirror gamification.py (PRIORITY_FACTORS, time_factor,
+// energy_factor, XP_BASE, QUEST_STEP_BONUS_XP, QUEST_ON_TIME_BONUS) so the card can
+// show the estimated quest reward exactly like manager._complete_project computes it.
+const XP_BASE = 10;
+const QUEST_PRIO_F = { 1: 3.0, 2: 2.0, 3: 1.5, 4: 1.0, 5: 0.5 };
+const QUEST_STEP_BONUS_XP = 25;
+const QUEST_ON_TIME_BONUS = 0.25;
+function questTimeFactor(min) {
+  return min <= 2 ? 0.5 : min <= 15 ? 1.0 : min <= 60 ? 1.5 : 2.0;
+}
+function questEnergyFactor(e) {
+  return { 1: 0.8, 2: 0.9, 3: 1.0, 4: 1.2, 5: 1.5 }[e] || 1.0;
+}
+// Shared config defaults for the quests card — used by BOTH the card (setConfig) and
+// the GUI editor, so the editor always fires a complete config (see tasks card).
+function questCardDefaults() {
+  return { title: "QUEST LOG", show_completed: false };
+}
+
 class GamifiedGTDQuestsCard extends LitElement {
-  // Quest log card: active quests with x/y progress bars + complete/new buttons
-  // (reads sensor.gtd_quest_log, calls create_project/complete_project).
+  // Quest log in Pip-Boy layout: LEFT third = list of active quests (click/hover
+  // selects one), with a "Show completed" toggle at the bottom of the list that adds
+  // the completed quests (dimmed, ✓) — like the Pip-Boy's completed-quests switch.
+  // RIGHT two thirds, split: top = selected quest's metadata (icon, name, progress
+  // bar, outcome, due, status, estimated reward) + complete/edit/delete icon buttons;
+  // bottom = the quest's tasks, open first, then dimmed completed (scrollable).
+  // Per-task rows: checkbox completes, move popover, edit, delete (all services).
+  // Config: title, show_completed (initial state of the toggle) — GUI-editable via
+  // gamified-gtd-quests-editor.
   static get properties() {
-    return { hass: {}, config: {}, _dlg: {} };
+    return { hass: {}, config: {}, _sel: {}, _showDone: {}, _dlg: {}, _moveUid: {}, _editId: {}, _task: {} };
   }
   static getStubConfig() {
     return { title: "QUEST LOG" };
   }
+  static getConfigElement() {
+    return document.createElement("gamified-gtd-quests-editor");
+  }
   setConfig(config) {
-    this.config = config;
+    this.config = { ...questCardDefaults(), ...config };
+    this._showDone = this.config.show_completed === true;
   }
   getCardSize() {
-    return 4;
+    return 5;
+  }
+  _quests() {
+    const log = this.hass.states["sensor.gtd_quest_log"];
+    return log ? Object.entries(log.attributes.quests || {}) : [];
+  }
+  // All tasks from the four todo.gtd_* entities (todo_items + tasks metadata).
+  _allTasks() {
+    const out = [];
+    for (const key of Object.keys(LISTS)) {
+      const st = this.hass.states[LISTS[key].entity];
+      if (!st) continue;
+      const meta = st.attributes.tasks || {};
+      for (const it of st.attributes.todo_items || []) {
+        out.push({ ...it, list: key, meta: meta[it.uid] || {} });
+      }
+    }
+    return out;
+  }
+  _questTasks(qid) {
+    return this._allTasks().filter((t) => t.meta.project_id === qid);
+  }
+  // Estimated quest reward — mirrors manager._complete_project: sum of step XP
+  // (awarded for done steps, estimated for open ones) + 25 XP per step, +25% when the
+  // quest would be finished before its deadline; caps = XP / 10.
+  _estReward(q, tasks) {
+    let xp = 0;
+    for (const t of tasks) {
+      const m = t.meta;
+      if (t.status === "completed") {
+        xp += m.xp_awarded || 0;
+      } else {
+        xp += Math.max(
+          1,
+          Math.round(
+            XP_BASE *
+              (QUEST_PRIO_F[m.priority || 3] || 1.5) *
+              questTimeFactor(m.time_estimate ?? 15) *
+              questEnergyFactor(m.energy || 3)
+          )
+        );
+      }
+    }
+    xp += QUEST_STEP_BONUS_XP * Math.max(tasks.length, 1);
+    if (q.due) {
+      const now = new Date();
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+      if (q.due >= today) xp = Math.round(xp * (1 + QUEST_ON_TIME_BONUS));
+    }
+    return { xp, caps: Math.round(xp / 10) };
+  }
+  _questRow(id, q, isDone) {
+    const sel = this._sel === id;
+    return html`<div class="arow ${sel ? "sel" : ""} ${isDone ? "qdone" : ""}"
+      @click=${() => (this._sel = id)} @mouseenter=${() => (this._sel = id)}>
+      ${icon("quest", id, "?")}
+      <span class="nm">${q.name}</span>
+      <span class="val">${isDone ? "✓ " : ""}${q.progress}</span>
+    </div>`;
+  }
+  _taskRow(t, isDone) {
+    const m = t.meta;
+    return html`<div class="task ${isDone ? "done" : ""}">
+      <div class="trow">
+        <input type="checkbox" .checked=${isDone}
+          @change=${() => svc(this.hass, "complete_task", { task_id: t.uid })} />
+        <span class="t-title">${t.summary}</span>
+        ${t.due ? html`<span class="badge">${t.due}</span>` : ""}
+        ${m.priority ? html`<span class="badge">P${m.priority}</span>` : ""}
+        <span class="movewrap">
+          <button class="ibtn" title="Move to another list" @click=${(e) => { e.stopPropagation(); this._moveUid = this._moveUid === t.uid ? null : t.uid; }}><ha-icon icon="mdi:folder-move-outline"></ha-icon></button>
+          ${this._moveUid === t.uid ? html`<span class="movemenu" @click=${(e) => e.stopPropagation()}>
+            ${Object.entries(LISTS).map(([k, l]) => html`<button class="mopt ${t.list === k ? "cur" : ""}" @click=${() => { this._moveUid = null; svc(this.hass, "move_task", { task_id: t.uid, list: k }); }}>${l.label}</button>`)}
+          </span>` : ""}
+        </span>
+        <button class="ibtn" title="Edit task" @click=${() => { this._task = t; this._dlg = "tedit"; }}><ha-icon icon="mdi:pencil-outline"></ha-icon></button>
+        <button class="ibtn" title="Delete task" @click=${() => svc(this.hass, "remove_task", { task_id: t.uid })}><ha-icon icon="mdi:trash-can-outline"></ha-icon></button>
+      </div>
+    </div>`;
+  }
+  _questDetail(id, q) {
+    const tasks = this._questTasks(id);
+    const open = tasks.filter((t) => t.status !== "completed");
+    const doneT = tasks.filter((t) => t.status === "completed");
+    const [d, t] = (q.progress || "0/0").split("/").map(Number);
+    const pct = t > 0 ? Math.round((100 * d) / t) : 0;
+    const est = this._estReward(q, tasks);
+    const active = q.status === "active";
+    return html`
+      <div class="qmeta">
+        <div class="row">
+          ${icon("quest", id, "?")}
+          <span class="val" style="font-size:1.1em">${q.name}</span>
+          <span style="flex:1"></span>
+          ${active ? html`<button class="ibtn" title="Complete quest" @click=${() => svc(this.hass, "complete_project", { project_id: id })}><ha-icon icon="mdi:check-circle-outline"></ha-icon></button>` : ""}
+          <button class="ibtn" title="Edit quest" @click=${() => { this._editId = id; this._dlg = "edit"; }}><ha-icon icon="mdi:pencil-outline"></ha-icon></button>
+          <button class="ibtn" title="Delete quest" @click=${() => svc(this.hass, "remove_project", { project_id: id })}><ha-icon icon="mdi:trash-can-outline"></ha-icon></button>
+        </div>
+        <div class="q-outcome">${q.desired_outcome || ""}</div>
+        <div class="row"><div class="bar"><div style="width:${pct}%"></div></div><span class="val">${q.progress}</span></div>
+        <div class="row">
+          ${q.due ? html`<span class="badge">due ${q.due}</span>` : ""}
+          <span class="badge">est. ${est.xp} XP / ${est.caps} caps</span>
+          <span class="badge">${q.status}</span>
+        </div>
+      </div>
+      <div class="qtasks">
+        ${tasks.length === 0 ? html`<div class="empty">No tasks assigned — set the project in the task form.</div>` : ""}
+        ${open.map((x) => this._taskRow(x, false))}
+        ${doneT.length ? html`<div class="sub" style="margin-top:6px">COMPLETED</div>` : ""}
+        ${doneT.map((x) => this._taskRow(x, true))}
+      </div>`;
   }
   render() {
-    const log = this.hass.states["sensor.gtd_quest_log"];
-    const quests = log ? Object.entries(log.attributes.quests || {}) : [];
+    const quests = this._quests();
     const active = quests.filter(([, q]) => q.status === "active");
     const done = quests.filter(([, q]) => q.status !== "active");
+    // keep the selection valid (default: first active quest)
+    if (!this._sel || !quests.some(([id]) => id === this._sel)) {
+      this._sel = active[0] ? active[0][0] : this._showDone && done[0] ? done[0][0] : null;
+    }
+    const sel = this._sel ? quests.find(([id]) => id === this._sel) : null;
     return html`
       <ha-card>
-        <div class="head"><span class="title">${this.config.title || "QUEST LOG"}</span>
-          <span class="sub">${active.length} active</span></div>
-        ${active.length === 0 ? html`<div class="empty">No active quests.</div>` : ""}
-        ${active.map(([id, q]) => {
-          const [d, t] = (q.progress || "0/0").split("/").map(Number);
-          const pct = t > 0 ? Math.round((100 * d) / t) : 0;
-          return html`<div class="quest">
-            <div class="q-name">${icon("quest", id, "?")}${q.name}</div>
-            <div class="q-outcome">${q.desired_outcome || ""}</div>
-            <div class="row"><div class="bar"><div style="width:${pct}%"></div></div><span class="val">${q.progress}</span>
-              ${q.due ? html`<span class="badge">due ${q.due}</span>` : ""}
-              <button @click=${() => svc(this.hass, "complete_project", { project_id: id })}>Complete</button>
+        <div class="head">
+          <span class="title">${this.config.title || "QUEST LOG"}</span>
+          <span class="sub">${active.length} active</span>
+          <button class="ibtn" title="New quest" @click=${() => (this._dlg = "new")}><ha-icon icon="mdi:plus"></ha-icon></button>
+        </div>
+        <div class="split qsplit">
+          <div class="alist">
+            ${active.length === 0 ? html`<div class="empty">No active quests.</div>` : ""}
+            ${active.map(([id, q]) => this._questRow(id, q, false))}
+            ${this._showDone ? done.map(([id, q]) => this._questRow(id, q, true)) : ""}
+            <div class="row" style="margin-top:6px">
+              <label class="chk"><input type="checkbox" .checked=${this._showDone}
+                @change=${(e) => (this._showDone = e.target.checked)} /> Show completed</label>
             </div>
-          </div>`;
-        })}
-        ${done.length ? html`<div class="head" style="margin-top:8px"><span class="sub">COMPLETED</span></div>
-          ${done.map(([, q]) => html`<div class="row"><span class="badge">✓</span><span>${q.name}</span><span class="badge">${q.progress}</span></div>`)}` : ""}
-        <div class="btns"><button @click=${() => (this._dlg = "new")}>New quest</button></div>
-        ${this._renderNewDialog()}
+          </div>
+          <div class="qdetail">
+            ${sel ? this._questDetail(sel[0], sel[1]) : html`<div class="empty">Select a quest on the left.</div>`}
+          </div>
+        </div>
+        ${this._renderQuestDialog()}
+        ${this._renderTaskDialog()}
       </ha-card>`;
   }
-  _renderNewDialog() {
-    if (this._dlg !== "new") return "";
-    return html`<ha-dialog .open=${true} @closed=${() => (this._dlg = null)} .heading="NEW QUEST">
+  // New / edit quest dialog (name, desired outcome, deadline) — fire-and-forget.
+  _renderQuestDialog() {
+    if (this._dlg !== "new" && this._dlg !== "edit") return "";
+    const isAdd = this._dlg === "new";
+    const q = !isAdd ? this._quests().find(([id]) => id === this._editId) : null;
+    const qv = q ? q[1] : {};
+    return html`<ha-dialog .open=${true} @closed=${() => (this._dlg = null)} .heading=${isAdd ? "NEW QUEST" : "EDIT QUEST"}>
       <div class="dlg">
-        <label>Name</label><input id="nq-name" type="text" />
-        <label>Desired outcome</label><input id="nq-outcome" type="text" />
-        <label>Deadline (optional)</label><input id="nq-due" type="date" />
+        <label>Name</label><input id="nq-name" type="text" .value=${qv.name || ""} />
+        <label>Desired outcome</label><input id="nq-outcome" type="text" .value=${qv.desired_outcome || ""} />
+        <label>Deadline (optional)</label><input id="nq-due" type="date" .value=${qv.due || ""} />
         <div class="btns">
-          <button @click=${async () => {
-            await svc(this.hass, "create_project", {
+          <button @click=${() => {
+            const data = {
               name: this.shadowRoot.querySelector("#nq-name").value,
               desired_outcome: this.shadowRoot.querySelector("#nq-outcome").value,
               due: this.shadowRoot.querySelector("#nq-due").value || undefined,
+            };
+            if (isAdd) svc(this.hass, "create_project", data);
+            else svc(this.hass, "update_project", { project_id: this._editId, ...data });
+            this._dlg = null;
+          }}>${isAdd ? "Create" : "Save"}</button>
+          <button @click=${() => (this._dlg = null)}>Cancel</button>
+        </div>
+      </div>
+    </ha-dialog>`;
+  }
+  // Compact task edit dialog inside the quest detail (title, list, due, priority,
+  // quest, notes) — the full task form lives on the tasks card.
+  _renderTaskDialog() {
+    if (this._dlg !== "tedit" || !this._task) return "";
+    const t = this._task;
+    const m = t.meta || {};
+    const quests = this._quests();
+    return html`<ha-dialog .open=${true} @closed=${() => (this._dlg = null)} .heading=${`EDIT TASK: ${t.summary}`}>
+      <div class="dlg">
+        <label>Title</label><input id="qt-title" type="text" .value=${t.summary} />
+        <label>Notes</label><textarea id="qt-notes">${t.description || ""}</textarea>
+        <label>List</label>
+        <select id="qt-list">${Object.entries(LISTS).map(([k, l]) => html`<option value=${k} ?selected=${t.list === k}>${l.label}</option>`)}</select>
+        <label>Due date</label><input id="qt-due" type="date" .value=${t.due || ""} />
+        <label>Priority (1 = highest, 5 = lowest)</label><input id="qt-priority" type="number" min="1" max="5" .value=${m.priority || 3} />
+        <label>Project (quest)</label>
+        <select id="qt-project"><option value="">— none —</option>
+          ${quests.map(([id, q]) => html`<option value=${id} ?selected=${m.project_id === id}>${q.name}</option>`)}</select>
+        <div class="btns">
+          <button @click=${() => {
+            const q = (id) => this.shadowRoot.querySelector(id).value;
+            svc(this.hass, "update_task", {
+              task_id: t.uid,
+              title: q("#qt-title"),
+              notes: q("#qt-notes"),
+              list: q("#qt-list"),
+              due: q("#qt-due") || undefined,
+              priority: Number(q("#qt-priority")) || 3,
+              project_id: q("#qt-project") || undefined,
             });
             this._dlg = null;
-          }}>Create</button>
+          }}>Save</button>
           <button @click=${() => (this._dlg = null)}>Cancel</button>
         </div>
       </div>
@@ -841,6 +1038,38 @@ class GamifiedGTDQuestsCard extends LitElement {
   }
 }
 defineCard("gamified-gtd-quests", GamifiedGTDQuestsCard);
+
+// GUI config editor for the quests card — HA's editor wrapper calls setConfig(value)
+// with the raw stored config (older frontends assign .config); support both, merge
+// shared defaults, fire the FULL config on config-changed.
+class GamifiedGTDQuestsEditor extends LitElement {
+  static get properties() {
+    return { hass: {}, config: {} };
+  }
+  setConfig(config) {
+    this.config = config;
+  }
+  _fire(config) {
+    this.dispatchEvent(
+      new CustomEvent("config-changed", { detail: { config }, bubbles: true, composed: true })
+    );
+  }
+  render() {
+    const c = { ...questCardDefaults(), ...(this.config || {}) };
+    return html`
+      <div class="ed">
+        <label>Title</label>
+        <input type="text" .value=${c.title || ""} @change=${(e) => this._fire({ ...c, title: e.target.value })} />
+        <label class="chk"><input type="checkbox" .checked=${c.show_completed === true}
+          @change=${(e) => this._fire({ ...c, show_completed: e.target.checked })} />
+          Show completed quests (initial state of the toggle in the list)</label>
+      </div>`;
+  }
+  static get styles() {
+    return cardCss;
+  }
+}
+defineCard("gamified-gtd-quests-editor", GamifiedGTDQuestsEditor);
 
 /* ------------------------------------------------------------------ */
 /* Tasks card (with Clarify dialog for the inbox) + GUI config editor  */
