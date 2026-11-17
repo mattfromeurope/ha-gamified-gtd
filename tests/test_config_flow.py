@@ -15,6 +15,9 @@ pytest.importorskip("homeassistant")
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import voluptuous_serialize  # noqa: E402
+from homeassistant.helpers import config_validation as cv  # noqa: E402
+
 from custom_components.gamified_gtd.config_flow import GamifiedGDTOptionsFlow  # noqa: E402
 from custom_components.gamified_gtd.goat_data import QUESTIONS  # noqa: E402
 
@@ -71,6 +74,54 @@ def test_special_step_routes_to_tags_when_character_exists():
     flow = _flow(profiles={"person.x": {"tagged_skills": ["guns"]}})
     result = asyncio.run(flow.async_step_special({s: "5" for s in SPECIAL_STATS}))
     assert result["step_id"] == "tags"
+
+
+def _serialize(result) -> None:
+    """Every form schema must survive voluptuous_serialize.convert — HA calls this when
+    sending the form to the frontend; a custom function inside vol.All raises ValueError
+    and the UI shows 'Unknown error occurred' on the step that was just submitted."""
+    assert result["type"] == "form"
+    voluptuous_serialize.convert(result["data_schema"], custom_serializer=cv.custom_serializer)
+
+
+def test_all_step_schemas_serialize_for_frontend():
+    """Regression: vol.All(vol.Schema(...), _validate_special) broke serialization ->
+    'Unknown error occurred' after OK on the person step (special form never shown)."""
+    flow = _flow()
+    flow.hass = MagicMock()
+    flow.hass.states.async_all.return_value = [MagicMock(entity_id="person.x")]
+    entry = MagicMock()
+    entry.data = {"persons": ["person.x"]}
+    entry.options = {}
+    flow._config_entry = entry
+    flow.handler = "e1"
+    flow.flow_id = "f1"
+    flow.context = {}
+
+    async def run():
+        r = await flow.async_step_init(None)
+        _serialize(r)
+        r = await flow.async_step_init(
+            {
+                "persons": ["person.x"], "level_cap": "30",
+                "default_time_estimate": 15, "default_energy": 3, "default_xp_base": 10,
+            }
+        )
+        _serialize(r)  # notify
+        r = await flow.async_step_notify({})
+        _serialize(r)  # person
+        r = await flow.async_step_person({"person": "person.x"})
+        _serialize(r)  # special
+        valid = {s: "5" for s in SPECIAL_STATS}
+        valid["strength"] = "10"  # total 40
+        r = await flow.async_step_special(valid)
+        _serialize(r)  # goat (character creation pending)
+        # invalid SPECIAL (35 != 40) re-shows the form with a base error
+        r = await flow.async_step_special({s: "5" for s in SPECIAL_STATS})
+        assert r["type"] == "form" and r["step_id"] == "special" and r["errors"]["base"]
+        _serialize(r)
+
+    asyncio.run(run())
 
 
 def test_options_flow_options_initialized_from_entry():

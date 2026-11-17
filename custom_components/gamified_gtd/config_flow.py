@@ -77,6 +77,19 @@ def _validate_special(value: dict[str, Any]) -> dict[str, Any]:
     return value
 
 
+def _special_schema() -> vol.Schema:
+    """Plain serializable schema for the 7 SPECIAL allocator fields (no custom function
+    inside vol.All — that breaks voluptuous_serialize.convert, see async_step_special)."""
+    return vol.Schema(
+        {
+            vol.Required(stat, default=SPECIAL_BASE): vol.All(
+                vol.Coerce(int), vol.Range(min=SPECIAL_MIN, max=SPECIAL_MAX)
+            )
+            for stat in g.SPECIAL_STATS
+        }
+    )
+
+
 def _base_schema(hass, defaults: dict[str, Any] | None = None) -> vol.Schema:
     """Schema for the global options (persons, level cap, default time/energy, XP base,
     default contexts) — used by the initial flow and the options 'init' step."""
@@ -240,6 +253,16 @@ class GamifiedGDTOptionsFlow(OptionsFlow):
         each starts at 5, 5 points are freely distributed (raise or lower, 1-10),
         so the total must be exactly 40 (enforced by _validate_special)."""
         if user_input is not None:
+            # Validate the 40-point rule here in the step and NOT via vol.All(...,
+            # _validate_special) in the data_schema: voluptuous_serialize.convert
+            # (used to send the form to the frontend) cannot serialize a plain
+            # function inside vol.All and raises -> "Unknown error occurred".
+            try:
+                _validate_special(user_input)
+            except vol.Invalid as err:
+                return self.async_show_form(
+                    step_id="special", data_schema=_special_schema(), errors={"base": str(err)}
+                )
             self._special = {
                 stat: int(user_input.get(stat, SPECIAL_BASE)) for stat in g.SPECIAL_STATS
             }
@@ -250,18 +273,7 @@ class GamifiedGDTOptionsFlow(OptionsFlow):
             if not setup.get("goat") and not setup.get("tagged_skills"):
                 return await self.async_step_goat()
             return await self.async_step_tags()
-        schema = vol.All(
-            vol.Schema(
-                {
-                    vol.Required(stat, default=SPECIAL_BASE): vol.All(
-                        vol.Coerce(int), vol.Range(min=SPECIAL_MIN, max=SPECIAL_MAX)
-                    )
-                    for stat in g.SPECIAL_STATS
-                }
-            ),
-            _validate_special,
-        )
-        return self.async_show_form(step_id="special", data_schema=schema)
+        return self.async_show_form(step_id="special", data_schema=_special_schema())
 
     async def async_step_goat(
         self, user_input: dict[str, Any] | None = None
