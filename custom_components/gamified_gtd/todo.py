@@ -119,9 +119,13 @@ class GTDTodoListEntity(TodoListEntity):
         return {"todo_items": items, "tasks": tasks}
 
     async def async_create_todo_item(self, item: TodoItem) -> None:
-        """HA todo 'add item' -> creates the task via the manager (in this list)."""
+        """HA todo 'add item' -> creates the task via the manager (in this list).
+        NOTE: ServiceCall's first argument is hass (since HA 2024.x) — the old
+        ServiceCall(domain, service, data) signature silently produced an empty
+        data dict and every write-through raised KeyError."""
         await self._manager.add_to_inbox(
             ServiceCall(
+                self.hass,
                 DOMAIN,
                 "add_to_inbox",
                 {
@@ -138,7 +142,7 @@ class GTDTodoListEntity(TodoListEntity):
         reopening sets the task back to open."""
         if item.status == TodoItemStatus.COMPLETED:
             await self._manager.complete_task(
-                ServiceCall(DOMAIN, "complete_task", {"task_id": item.uid})
+                ServiceCall(self.hass, DOMAIN, "complete_task", {"task_id": item.uid})
             )
         else:
             task = self._manager.get_task(item.uid)
@@ -151,5 +155,5 @@ class GTDTodoListEntity(TodoListEntity):
         for uid in uids:
             if uid in self._manager.data["tasks"]:
                 await self._manager.remove_task(
-                    ServiceCall(DOMAIN, "remove_task", {"task_id": uid})
+                    ServiceCall(self.hass, DOMAIN, "remove_task", {"task_id": uid})
                 )

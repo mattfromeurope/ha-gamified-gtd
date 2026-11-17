@@ -1,0 +1,116 @@
+"""Manager-level regression tests for the service logic (needs `homeassistant`).
+
+Covers the bugs/services added around the Pip-Boy cards + GOAT:
+- choose_perk passed an int instead of the owned-perk list to
+  perk_requirements_met -> "'int' object has no attribute 'count'" on EVERY call
+- move_task moves a task between GTD lists
+- update_task keeps project <-> task links in sync (quest x/y progress)
+- submit_goat scores the answers and sets the Tag! skills on the profile
+"""
+
+import asyncio
+import sys
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
+pytest.importorskip("homeassistant")
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from homeassistant.core import ServiceCall  # noqa: E402
+
+from custom_components.gamified_gtd.const import DOMAIN  # noqa: E402
+from custom_components.gamified_gtd.manager import GTDManager  # noqa: E402
+
+
+def _manager() -> GTDManager:
+    """A manager with mocked hass + storage, one profile for person.x."""
+    mgr = GTDManager(MagicMock(), "e1", {})
+    mgr.data = mgr._initial_data()
+    mgr.data["profiles"]["person.x"] = mgr._new_profile("person.x")
+    mgr._save = AsyncMock()  # don't touch real storage
+    return mgr
+
+
+def _profile(mgr) -> dict:
+    return mgr.data["profiles"]["person.x"]
+
+
+def _call(service: str, data: dict) -> ServiceCall:
+    """ServiceCall(hass, domain, service, data) — hass first since HA 2024.x."""
+    return ServiceCall(MagicMock(), DOMAIN, service, data)
+
+
+def test_choose_perk_regression_owned_list_not_count():
+    """Regression: choose_perk must pass profile['perks'] (a list) to
+    perk_requirements_met, not profile['perks'].count(...) (an int)."""
+    mgr = _manager()
+    profile = _profile(mgr)
+    profile["level"] = 4  # 'educated' is a level-4 perk
+    profile["perk_choice_pending"] = True
+    profile["special"]["intelligence"] = 10  # satisfy 'educated' (INT >= 4)
+    call = _call("choose_perk", {"person": "person.x", "perk": "educated"})
+    result = asyncio.run(mgr.choose_perk(call))
+    assert result["perk"] == "educated"
+    assert "educated" in profile["perks"]
+    assert profile["perk_choice_pending"] is False
+
+
+def test_choose_perk_rejects_unmet_requirements():
+    mgr = _manager()
+    profile = _profile(mgr)
+    profile["level"] = 2
+    profile["perk_choice_pending"] = True
+    # 'educated' needs INT >= 6, profile has INT 5
+    call = _call("choose_perk", {"person": "person.x", "perk": "educated"})
+    with pytest.raises(ValueError, match="not met"):
+        asyncio.run(mgr.choose_perk(call))
+    assert profile["perks"] == []
+
+
+def test_move_task_between_lists():
+    mgr = _manager()
+    mgr.data["tasks"]["t1"] = mgr._new_task("Buy milk", {"list": "inbox"})
+    call = _call("move_task", {"task_id": "t1", "list": "next_actions"})
+    result = asyncio.run(mgr.move_task(call))
+    assert result["list"] == "next_actions"
+    assert mgr.data["tasks"]["t1"]["list"] == "next_actions"
+    with pytest.raises(ValueError):
+        asyncio.run(mgr.move_task(_call("move_task", {"task_id": "t1", "list": "nope"})))
+
+
+def test_update_task_project_link_stays_in_sync():
+    """Assigning via update_task must add the task to project['task_ids'] (drives the
+    quest x/y progress) and removing it must remove it again."""
+    mgr = _manager()
+    task = mgr._new_task("Step 1", {"list": "inbox"})  # note: _new_task assigns its own id
+    mgr.data["tasks"][task["id"]] = task
+    tid = task["id"]
+    project_id = mgr._create_project("Quest", "outcome", None)
+    asyncio.run(
+        mgr.update_task(_call("update_task", {"task_id": tid, "project_id": project_id}))
+    )
+    assert task["project_id"] == project_id
+    assert tid in mgr.data["projects"][project_id]["task_ids"]
+    # detach again (empty string = none, as the card sends it)
+    asyncio.run(
+        mgr.update_task(_call("update_task", {"task_id": tid, "project_id": ""}))
+    )
+    assert task["project_id"] is None
+    assert tid not in mgr.data["projects"][project_id]["task_ids"]
+
+
+def test_submit_goat_sets_tag_skills():
+    mgr = _manager()
+    call = _call("submit_goat", {"person": "person.x", "answers": [0] * 10})
+    result = asyncio.run(mgr.submit_goat(call))
+    # all-first-answers: Small Guns x2 -> guns; tie-break alphabetical -> barter, explosives
+    assert result["tags"] == ["guns", "barter", "explosives"]
+    assert _profile(mgr)["tagged_skills"] == ["guns", "barter", "explosives"]
+    assert _profile(mgr)["goat"]["job"]["name"] == "Tattoo artist"
+    # answers as comma separated string (service UI text field) work too
+    call2 = _call("submit_goat", {"person": "person.x", "answers": "0,0,0,0,0,0,0,0,0,0"})
+    result2 = asyncio.run(mgr.submit_goat(call2))
+    assert result2["tags"] == result["tags"]
