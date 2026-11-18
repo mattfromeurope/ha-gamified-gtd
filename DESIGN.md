@@ -23,10 +23,11 @@ services + events, custom Lovelace card shipped with the integration — the car
 
 | List | Purpose |
 |---|---|
-| `inbox` | Capture everything without thinking |
+| `inbox` | Capture everything without thinking — **type-less**: only the title is required, the item always lands here, the type/list is decided at clarify |
 | `next_actions` | Concrete next actions, optionally with a **context** (`@home`, `@computer`, `@phone`, `@errands`, `@anywhere`, freely extendable) |
 | `waiting_for` | Delegated items / waiting on others (not counted as open quest steps) |
 | `someday_maybe` | Someday/maybe |
+| `reference` | Reference material (not actionable, kept for later) |
 
 `todo` entities (one per list, shared across users) mirror the own storage; assignment happens
 via the `assigned_to` attribute (Better ToDo approach). The integration's own storage is the
@@ -43,8 +44,10 @@ from the options applies (once, not per task).
 
 ### Clarify
 
-`clarify` processes an inbox item into: next action (with context) / project / waiting-for /
-someday — or marks it done directly (2-minute rule).
+`clarify` processes an inbox item into: next action (with context) / project (with desired outcome) /
+waiting-for (with `waiting_for` whom) / someday / reference (not actionable, keep) / trash (delete) —
+or marks it done directly (2-minute rule). Tasks also carry `defer_until` (GTD tickler date, separate
+from `due`) and `updated_at`, which drives the computed weekly-review checklist.
 
 ### Projects = Quests
 

@@ -101,7 +101,7 @@ The original FNV icons are copyrighted and **not shipped**. Drop your own files 
 
 ## Entities
 
-- `todo.gtd_inbox`, `todo.gtd_next_actions`, `todo.gtd_waiting_for`, `todo.gtd_someday_maybe`
+- `todo.gtd_inbox`, `todo.gtd_next_actions`, `todo.gtd_waiting_for`, `todo.gtd_someday_maybe`, `todo.gtd_reference` (GTD reference material)
   (shared lists; assignment via the `assigned_to` attribute)
 - Per person: `sensor.<name>_level`, `sensor.<name>_hp`, `sensor.<name>_karma`,
   `sensor.<name>_caps`, `sensor.<name>_special`, `sensor.<name>_skills`, `sensor.<name>_perks`

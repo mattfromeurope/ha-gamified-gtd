@@ -1321,8 +1321,8 @@ class GamifiedGTDTasksCard extends LitElement {
       ${!isAdd ? html`<label class="chk"><input id="td-done" type="checkbox" .checked=${t && t.status === "completed"} /> Completed</label>` : ""}
       <label>Title</label><input id="td-title" type="text" .value=${t ? t.summary : ""} />
       <label>Notes</label><textarea id="td-notes">${t && t.description ? t.description : ""}</textarea>
-      <label>List</label>
-      <select id="td-list">${Object.entries(LISTS).map(([k, l]) => html`<option value=${k} ?selected=${(t ? t.list : this.config.list) === k}>${l.label}</option>`)}</select>
+      ${!isAdd ? html`<label>List</label>
+      <select id="td-list">${Object.entries(LISTS).map(([k, l]) => html`<option value=${k} ?selected=${(t ? t.list : this.config.list) === k}>${l.label}</option>`)}</select>` : ""}
       <label>Project (quest)</label>
       <select id="td-project"><option value="">— none —</option>
         ${quests.map(([id, q]) => html`<option value=${id} ?selected=${m.project_id === id}>${q.name}</option>`)}</select>
@@ -1361,7 +1361,8 @@ class GamifiedGTDTasksCard extends LitElement {
             const data = {
               title: q("#td-title"),
               notes: q("#td-notes"),
-              list: q("#td-list"),
+              // GTD type-less capture: no list on add — always inbox, clarify decides
+              ...(isAdd ? {} : { list: q("#td-list") }),
               project_id: q("#td-project") || undefined,
               assigned_to: q("#td-assigned") || undefined,
               priority: Number(q("#td-priority")) || 3,

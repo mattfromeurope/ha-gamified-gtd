@@ -19,11 +19,12 @@ STORAGE_WRITE_DELAY = 1.0
 # ---------------------------------------------------------------------------
 # GTD lists
 # ---------------------------------------------------------------------------
-# The four GTD lists; each maps to one shared todo entity (todo.gtd_<list>).
+# The five GTD lists; each maps to one shared todo entity (todo.gtd_<list>).
 LIST_INBOX = "inbox"
 LIST_NEXT_ACTIONS = "next_actions"
 LIST_WAITING_FOR = "waiting_for"
 LIST_SOMEDAY = "someday_maybe"
+LIST_REFERENCE = "reference"  # GTD reference material (not actionable, kept for later)
 
 # list key -> card/entity display name.
 TODO_LISTS = {
@@ -31,6 +32,7 @@ TODO_LISTS = {
     LIST_NEXT_ACTIONS: "GTD Next Actions",
     LIST_WAITING_FOR: "GTD Waiting For",
     LIST_SOMEDAY: "GTD Someday/Maybe",
+    LIST_REFERENCE: "GTD Reference",
 }
 
 # Task lifecycle states (kept separate from HA's TodoItemStatus on purpose).

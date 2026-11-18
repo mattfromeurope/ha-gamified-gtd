@@ -335,3 +335,83 @@ def test_update_and_remove_project():
     assert res["removed"] == pid
     assert pid not in mgr.data["projects"]
     assert t["project_id"] is None and t["id"] in mgr.data["tasks"]
+
+
+def test_gtd_clarify_decisions_reference_trash_waiting_for():
+    """GTD clarify covers the full decision set: next_action / project / waiting_for
+    (with whom) / someday / reference / trash / done."""
+    mgr = _manager()
+    t = mgr._new_task("Doc", {"list": "inbox"})
+    mgr.data["tasks"][t["id"]] = t
+    r = asyncio.run(mgr.clarify(_call("clarify", {"task_id": t["id"], "decision": "reference"})))
+    assert r["list"] == "reference" and t["list"] == "reference"
+
+    t2 = mgr._new_task("Wait on Bob", {"list": "inbox"})
+    mgr.data["tasks"][t2["id"]] = t2
+    r = asyncio.run(mgr.clarify(_call("clarify", {"task_id": t2["id"], "decision": "waiting_for", "waiting_for": "Bob"})))
+    assert t2["list"] == "waiting_for" and t2["waiting_for"] == "Bob"
+
+    t3 = mgr._new_task("Junk", {"list": "inbox"})
+    mgr.data["tasks"][t3["id"]] = t3
+    r = asyncio.run(mgr.clarify(_call("clarify", {"task_id": t3["id"], "decision": "trash"})))
+    assert r["list"] == "trash" and t3["id"] not in mgr.data["tasks"]
+
+
+def test_gtd_task_fields_waiting_for_defer_until_and_touch():
+    """waiting_for / defer_until are stored and updatable; update/move touch updated_at."""
+    import time
+
+    mgr = _manager()
+    t = mgr._new_task("A", {"list": "inbox", "waiting_for": "Alice", "defer_until": "2025-12-01"})
+    mgr.data["tasks"][t["id"]] = t
+    assert t["waiting_for"] == "Alice" and t["defer_until"] == "2025-12-01"
+    assert t["updated_at"]
+    time.sleep(0.01)
+    asyncio.run(mgr.update_task(_call("update_task", {"task_id": t["id"], "defer_until": "2025-12-24"})))
+    assert t["defer_until"] == "2025-12-24"
+    assert t["updated_at"] > t["created_at"] or t["updated_at"] != t["created_at"]
+    asyncio.run(mgr.move_task(_call("move_task", {"task_id": t["id"], "list": "reference"})))
+    assert t["list"] == "reference"
+
+
+def test_review_checklist_computed_items():
+    """waiting_for_followed_up / projects_reviewed / someday_reviewed are computed from
+    timestamps (not hardcoded True); calendar_checked stays manual."""
+    mgr = _manager()
+    state = mgr.review_checklist_state()
+    assert state["calendar_checked"] is True
+    assert state["waiting_for_followed_up"] is True and state["projects_reviewed"] is True
+
+    old = "2000-01-01T00:00:00"
+    w = mgr._new_task("wait", {"list": "waiting_for"})
+    w.update({"created_at": old, "updated_at": old})
+    mgr.data["tasks"][w["id"]] = w
+    s = mgr._new_task("maybe", {"list": "someday_maybe"})
+    s.update({"created_at": old, "updated_at": old})
+    mgr.data["tasks"][s["id"]] = s
+    pid = mgr._create_project("Q", "o", None)
+    mgr.data["projects"][pid]["created_at"] = old
+    state = mgr.review_checklist_state()
+    assert state["waiting_for_followed_up"] is False
+    assert state["someday_reviewed"] is False
+    assert state["projects_reviewed"] is False
+    # touching the project's step flips projects_reviewed back
+    st = mgr._new_task("step", {"list": "next_actions"})
+    mgr.data["tasks"][st["id"]] = st
+    mgr._set_task_project(st, pid)
+    assert mgr.review_checklist_state()["projects_reviewed"] is True
+
+
+def test_add_to_inbox_is_typeless_always_inbox():
+    """GTD capture is type-less: add_to_inbox ALWAYS lands in the inbox — even if a
+    `list` sneaks into the payload, it is forced to inbox (decided later at clarify)."""
+    mgr = _manager()
+    t = mgr._new_task("x", {})  # not used, just for id shape
+    r = asyncio.run(mgr.add_to_inbox(_call("add_to_inbox", {"title": "Buy milk"})))
+    task = mgr.data["tasks"][r["task_id"]]
+    assert task["list"] == "inbox"
+    # even a forged list in the raw data must not win
+    r2 = asyncio.run(
+        mgr.add_to_inbox(_call("add_to_inbox", {"title": "Direct", "list": "next_actions"}))
+    )
+    assert mgr.data["tasks"][r2["task_id"]]["list"] == "inbox"
