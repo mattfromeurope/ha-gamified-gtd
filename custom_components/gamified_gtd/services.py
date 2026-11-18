@@ -63,7 +63,9 @@ ADD_TO_INBOX_SCHEMA = vol.Schema(
         vol.Optional("tags"): vol.Any(cv.string, [cv.string]),
         vol.Optional("context"): cv.string,
         vol.Optional("project_id"): cv.string,
-        vol.Optional("list"): vol.In(["inbox", "next_actions", "waiting_for", "someday_maybe"]),
+        vol.Optional("list"): vol.In(list(TODO_LISTS)),
+        vol.Optional("waiting_for"): cv.string,
+        vol.Optional("defer_until"): cv.string,
         vol.Optional("due_time"): cv.string,
         vol.Optional("reminders"): vol.Any([vol.Coerce(int)], cv.string),
         vol.Optional("location"): vol.Schema(
@@ -84,6 +86,7 @@ CLARIFY_SCHEMA = vol.Schema(
         vol.Optional("project_id"): cv.string,
         vol.Optional("project_name"): cv.string,
         vol.Optional("desired_outcome"): cv.string,
+        vol.Optional("waiting_for"): cv.string,  # whom we wait for (decision=waiting_for)
         vol.Optional("assigned_to"): cv.string,
         vol.Optional("person"): cv.string,
     }
@@ -95,9 +98,11 @@ UPDATE_TASK_SCHEMA = vol.Schema(
         **TASK_FIELDS,
         vol.Optional("title"): cv.string,
         vol.Optional("notes"): cv.string,
-        vol.Optional("list"): vol.In(["inbox", "next_actions", "waiting_for", "someday_maybe"]),
+        vol.Optional("list"): vol.In(list(TODO_LISTS)),
         vol.Optional("context"): cv.string,
         vol.Optional("project_id"): cv.string,
+        vol.Optional("waiting_for"): cv.string,
+        vol.Optional("defer_until"): cv.string,
         vol.Optional("priority"): vol.All(vol.Coerce(int), vol.Range(min=1, max=5)),
         vol.Optional("due"): cv.string,
         vol.Optional("time_estimate"): vol.All(vol.Coerce(float), vol.Range(min=0)),

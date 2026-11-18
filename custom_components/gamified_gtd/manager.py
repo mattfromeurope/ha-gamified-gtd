@@ -54,6 +54,9 @@ from .const import (
     EVENT_TASK_COMPLETED,
     LIST_INBOX,
     LIST_NEXT_ACTIONS,
+    LIST_REFERENCE,
+    LIST_SOMEDAY,
+    LIST_WAITING_FOR,
     OVERDUE_KARMA_DAYS,
     PROJECT_ACTIVE,
     PROJECT_DONE,
@@ -327,9 +330,18 @@ class GTDManager:
             "energy": int(call_data.get("energy", self.default_energy)),
             "assigned_to": call_data.get("assigned_to"),
             "tags": list(call_data.get("tags", [])),
+            # GTD: waiting-for needs "whom", and deferred items need a defer-until
+            # date (tickler) — separate from the due date
+            "waiting_for": call_data.get("waiting_for"),
+            "defer_until": call_data.get("defer_until"),
             "created_at": _now_iso(),
+            "updated_at": _now_iso(),  # drives the computed weekly-review checklist
             "completed_at": None,
         }
+
+    def _touch(self, task: dict[str, Any]) -> None:
+        """Mark a task as touched now (used by the weekly-review checklist)."""
+        task["updated_at"] = _now_iso()
 
     def get_task(self, task_id: str) -> dict[str, Any]:
         """Look up a task by id; raises ValueError for unknown ids."""
@@ -354,20 +366,30 @@ class GTDManager:
         return {"task_id": task["id"]}
 
     async def clarify(self, call: ServiceCall) -> dict[str, Any]:
-        """GTD 'clarify' step: move an inbox task to next_actions (optionally with
-        context / into a project), waiting_for, someday — or complete it directly
-        (2-minute rule)."""
+        """GTD 'clarify' step: decide what an inbox item is —
+        next_action (with context) / project (with desired outcome) / waiting_for
+        (with whom) / someday / reference (not actionable, keep) / trash (delete) —
+        or done directly (2-minute rule)."""
         task = self.get_task(call.data["task_id"])
         decision = call.data["decision"]
         if decision == "done":
             return await self.complete_task(call)
         target_lists = {
             "next_action": LIST_NEXT_ACTIONS,
-            "waiting_for": "waiting_for",
-            "someday": "someday_maybe",
+            "waiting_for": LIST_WAITING_FOR,
+            "someday": LIST_SOMEDAY,
+            "reference": LIST_REFERENCE,  # GTD: not actionable -> reference material
         }
+        if decision == "trash":
+            # GTD: not actionable and not worth keeping -> trash
+            del self.data["tasks"][task["id"]]
+            await self._save()
+            return {"task_id": task["id"], "list": "trash"}
         if decision in target_lists:
             task["list"] = target_lists[decision]
+            if decision == "waiting_for" and call.data.get("waiting_for"):
+                task["waiting_for"] = str(call.data["waiting_for"])
+            self._touch(task)
         elif decision == "project":
             if call.data.get("project_id"):
                 project_id = call.data["project_id"]
@@ -381,6 +403,7 @@ class GTDManager:
             # route through the helper so project['task_ids'] stays in sync
             # (drives the x/y quest progress) — direct assignment undercounted steps
             self._set_task_project(task, project_id)
+            self._touch(task)
         else:
             raise ValueError(f"Unknown clarify decision: {decision}")
         if call.data.get("context"):
@@ -419,6 +442,7 @@ class GTDManager:
         if new_list not in TODO_LISTS:
             raise ValueError(f"Unknown list: {new_list} (expected one of {sorted(TODO_LISTS)})")
         task["list"] = new_list
+        self._touch(task)
         await self._save()
         return {"task_id": task["id"], "list": new_list}
 
@@ -438,9 +462,12 @@ class GTDManager:
             "location",
             "assigned_to",
             "tags",
+            "waiting_for",  # GTD: whom are we waiting for
+            "defer_until",  # GTD tickler: not actionable before this date
         ):
             if key in call.data:
                 task[key] = call.data[key]
+        self._touch(task)
         if "reminders" in call.data:
             task["reminders"] = self._normalize_reminders(call.data["reminders"])
         if "overdue_repeat" in call.data:
@@ -945,25 +972,57 @@ class GTDManager:
     # ------------------------------------------------------------------
 
     def review_checklist_state(self) -> dict[str, bool]:
-        """Auto-checked weekly review checklist (decided in the design): inbox empty,
-        next actions current (none untouched for 7+ days). The remaining GTD items are
-        review habits and stay true (checked off by doing the review)."""
+        """Auto-checked weekly review checklist. Computed from task/project timestamps
+        (updated_at / created_at, window = REVIEW_INTERVAL_DAYS): inbox empty, next
+        actions current, waiting-for followed up, projects reviewed, someday reviewed.
+        `calendar_checked` stays manual (True) — there is no HA calendar integration to
+        check against; the user confirms it by doing the review."""
         tasks = list(self.data["tasks"].values())
-        inbox_open = any(t["list"] == LIST_INBOX and t["status"] == TASK_OPEN for t in tasks)
         week_ago = (dt_util.now() - timedelta(days=REVIEW_INTERVAL_DAYS)).isoformat()
+
+        def touched_recently(t: dict[str, Any]) -> bool:
+            return max(t.get("created_at") or "", t.get("updated_at") or "") >= week_ago
+
+        inbox_open = any(t["list"] == LIST_INBOX and t["status"] == TASK_OPEN for t in tasks)
         stale_actions = any(
             t["list"] == LIST_NEXT_ACTIONS
             and t["status"] == TASK_OPEN
-            and t["created_at"] < week_ago
+            and not touched_recently(t)
             for t in tasks
+        )
+        stale_waiting = any(
+            t["list"] == LIST_WAITING_FOR
+            and t["status"] == TASK_OPEN
+            and not touched_recently(t)
+            for t in tasks
+        )
+        stale_someday = any(
+            t["list"] == LIST_SOMEDAY
+            and t["status"] == TASK_OPEN
+            and not touched_recently(t)
+            for t in tasks
+        )
+        # a project counts as reviewed when it was created recently or any of its
+        # steps was touched within the review window
+        active_projects = [
+            p for p in self.data["projects"].values() if p["status"] == PROJECT_ACTIVE
+        ]
+        projects_reviewed = all(
+            p.get("created_at", "") >= week_ago
+            or any(
+                (self.data["tasks"].get(tid) or {}).get("updated_at", "") >= week_ago
+                or (self.data["tasks"].get(tid) or {}).get("created_at", "") >= week_ago
+                for tid in p["task_ids"]
+            )
+            for p in active_projects
         )
         return {
             "inbox_empty": not inbox_open,
             "next_actions_current": not stale_actions,
-            "projects_reviewed": True,
-            "waiting_for_followed_up": True,
-            "calendar_checked": True,
-            "someday_reviewed": True,
+            "waiting_for_followed_up": not stale_waiting,
+            "projects_reviewed": projects_reviewed,
+            "someday_reviewed": not stale_someday,
+            "calendar_checked": True,  # manual — no calendar integration
         }
 
     def review_due(self, profile: dict[str, Any]) -> bool:

@@ -28,6 +28,14 @@ add_to_inbox:
       name: Due time (default 09:00 when only a date is set)
       selector:
         time:
+    waiting_for:
+      name: Waiting for (whom) — GTD delegated item
+      selector:
+        text:
+    defer_until:
+      name: Defer until (tickler date — not actionable before this)
+      selector:
+        date:
     reminders:
       name: Reminders (minutes before due, comma separated)
       description: e.g. "60, 1440" = 1 h and 1 day before
@@ -89,7 +97,10 @@ add_to_inbox:
 
 clarify:
   name: Clarify inbox item
-  description: Process an inbox item into a next action, project, waiting-for, someday — or mark it done.
+  description: >-
+    Process an inbox item (GTD clarify) into next action, project, waiting-for
+    (with whom), someday/maybe, reference (not actionable, keep), trash (delete)
+    — or mark it done (2-minute rule).
   fields:
     task_id:
       name: Task id
@@ -106,9 +117,15 @@ clarify:
             - project
             - waiting_for
             - someday
+            - reference
+            - trash
             - done
     context:
       name: Context
+      selector:
+        text:
+    waiting_for:
+      name: Waiting for (whom) — used with decision waiting_for
       selector:
         text:
     project_id:
@@ -184,6 +201,14 @@ update_task:
     due_time:
       selector:
         time:
+    waiting_for:
+      name: Waiting for (whom) — GTD delegated item
+      selector:
+        text:
+    defer_until:
+      name: Defer until (tickler date — not actionable before this)
+      selector:
+        date:
     reminders:
       name: Reminders (minutes before due, comma separated)
       selector:
