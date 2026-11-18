@@ -1,85 +1,182 @@
-# TECH v2 — technisches Umsetzungskonzept (GTD in HA + FNV-Gamification)
+# TECH v2 — technisches Umsetzungskonzept: GTD in Home Assistant (+ FNV-Gamification später)
 
-Basis: `DESIGN-v2.md` (GTD-Prozess + Entscheidungen). Alte Implementierung bleibt als
-Referenz (Branch `vibe/dev-5adb24`, DESIGN.md) — dieser Stand ist ein FRESH DESIGN,
-nicht die Übernahme des Alten. Gamification (FNV) ist eigener Abschnitt weiter unten.
+Basis: `DESIGN-v2.md` (GTD-Prozess + Entscheidungs-Log). Referenz für bewährte Patterns und
+Hard-Learned-Lessons: alte Implementierung auf `vibe/dev-5adb24` (DESIGN.md, README,
+`custom_components/gamified_gtd/`). Dieser Branch hier enthält bewusst nur Doku.
 
-## 1. HA-Bordmittel → GTD-Begriffe (was HA nativ kann)
+---
 
-| GTD-Begriff | HA-Bordmittel | Bemerkung |
+## 1. Ziele / Nicht-Ziele
+
+Ziele: möglichst originalgetreue GTD-Umsetzung als HA-Custom-Integration; alles auch ohne
+eigene Cards bedienbar (Services, todo-Entities, Sensoren, Events); Multi-User über
+`person.*`; Gamification (FNV) als eigene Schicht später.
+Nicht-Ziele v1: kein Kalender-Spiegel (Kalender extern), keine Horizons-Objekte, keine
+E-Mail-Integration, keine FNV-Original-Icons (Copyright — Drop-in-Ordner + Fallbacks).
+
+## 2. Was HA nativ bietet (Inventar)
+
+| capability | HA-Mechanismus | GTD-Nutzung |
 |---|---|---|
-| Inbox / Buckets als Status | `todo.*`-Entities + eigenes Status-Attribut | HA todo hat nur needs_action/completed; unser GTD-Status (inbox/next_action/waiting_for/on_hold/someday/reference) ist Zusatz-Attribut |
-| Listen | eine `todo.*`-Entity pro Bucket (geteilte Listen) ODER eine Entity + Listen-Attribut | Entscheidung offen (§3) |
-| Termine | externer Kalender (Google des Users); Item trägt `due`/`due_time` | kein HA-Kalender-Spiegel nötig (entschieden) |
-| Kontexte | eigenes Attribut `contexts: [...]` + konfigurierbare Liste in den Optionen | freie Liste mit Defaults, mehrere pro Item (entschieden) |
-| Personen/Zuordnung | `person.*`-Entities, Feld `assigned_to` | Multi-User über person-Entities |
-| Reminder/Fälligkeit | eigene Scheduler-Logik (Timer auf due/due_time, overdue_repeat) + `notify` | HA hat keine Task-Reminder nativ |
-| Ortsbasierte Reminder | `zone.*`-Entities + State-Change-Tracking (person in Zone) | wie Better ToDo |
-| Tägliche Summary | eigene Logik (Timer) + notify / persistent_notification | |
-| Speicherung | `Store` (JSON in .storage) als Single Source of Truth, Entities als schreibbarer Spiegel | oder direkt Entities — Entscheidung offen (§3) |
-| Schreiben/Lesen | Services (`gamified_gtd.*`) + todo-Entity-Schreibzugriff (Companion-App-kompatibel) + Events für UI | Thin-Frontend-Prinzip |
-| UI | eigene Lovelace-Cards (später), alles auch ohne Cards über HA-Built-ins | |
-| Automationen | Events feuern (`gamified_gtd_*`), Nutzer kann eigene Automationen bauen | |
+| Config Entry + Options Flow | `config_flow.py`, `OptionsFlow`, Selectoren | Setup: Personen, Kontexte (Default-Liste), Defaults (time_estimate/energy), Benachrichtigungs-Services, Summary-Zeit |
+| Services | `hass.services.async_register` + `services.yaml` (mit Selektoren) | kompletter Schreibzugriff (Capture, Clarify, …) |
+| Entities | `todo.*` (Features CREATE/UPDATE/DELETE/SET_DUE…), `sensor.*`, `binary_sensor` | Listen/Sichten; todo-Entities halten Companion-App kompatibel |
+| Events | `hass.bus.async_fire` | UI-Updates, Automationen für den User |
+| Persistenz | `homeassistant.helpers.storage.Store` (JSON in `.storage/`) | Single Source of Truth |
+| Personen | `person.*`-Entities (user_id, Zonen-Tracking) | Multi-User, assigned_to, Zonen-Reminder |
+| Zonen | `zone.*` + State-Änderungen | ortsbasierte „held“-Reminder |
+| Kalender | `calendar.*`-Entities (lesen) | optional später; v1 extern |
+| Benachrichtigung | `notify.*`-Services, `persistent_notification` | Reminder, Summary, Review-Hinweis |
+| Websocket/REST API | HA built-in | externe Capture-Apps, LLM-Tools |
+| Frontend | Lovelace custom cards, `async_register_static_paths`, extra module URLs | eigene Cards (theme-aware) |
+| Automationen | User-seitig auf unsere Events | z. B. „bei quest_completed → …“ |
+| HACS | `hacs.json`, manifest | Distribution |
 
-## 2. Domänenmodell (fachlich, aus DESIGN-v2)
+## 3. Architektur-Entscheidungen (offen — morgen im Detail)
 
-**Item:** `id, title, notes, status (inbox|next_action|waiting_for|on_hold|someday_maybe|reference|done),
-contexts: [..], project_id?, assigned_to?, due?, due_time?, defer_until? (Tickler),
-waiting_for? (whom), follow_up_on?, repeat? (Regel), depends_on?/hold_reason? (on hold),
-time_estimate?, energy?, priority?, tags: [], source?, created_at, updated_at, completed_at?`
+1. **Entity-Mapping** (Kernfrage):
+   - **A) Geteilte todo-Entities pro Bucket** (`todo.gtd_inbox`, `todo.gtd_next_actions`, …):
+     + Companion-App/HA-Todo-Card kompatibel, Schreibzugriff nativ (create/update/delete item)
+     + bewährt in v1 (Better-ToDo-Modell)
+     − GTD-Status (welcher Bucket) muss als Attribut gepflegt werden; Buckets = Status des
+       Items (Design-Entscheidung 9) passt besser zu B/C
+   - **B) Eine todo-Entity**, Bucket als Attribut `status` (z. B. `todo.gamified_gtd`): Buckets
+     = Status (Design-konform), aber Companion-App sieht alles in einer Liste
+   - **C) Keine todo-Entities**, nur Sensoren + Services + eigene Cards: maximal design-konform,
+     aber keine native App-Unterstützung
+   - Empfehlung: **A** (todo-Entities pro Bucket) mit GTD-Status als Attribut — Kompatibilität
+     + saubere Sichten; ODER B wenn „Buckets = Status“ strikt umgesetzt werden soll. Morgen entscheiden.
+2. **Storage:** eine `Store`-JSON (`gamified_gtd`) als Single Source of Truth; Entities als
+   schreibbarer Spiegel (Write-Through via Services). Alternative: nur HA-Entities/Storage.
+3. **Multi-User:** geteilte Listen + `assigned_to` (v1-Ansatz) vs. pro Person getrennte
+   Bereiche. Empfehlung: geteilt + assigned_to (GTD ist prinzipiell teilbar).
+4. **Schreibpfade:** Services (immer) + todo-Entity-Operationen (Write-Through in den Manager).
+5. **UI-Umfang:** eigene Cards (v1: 10 Typen) vs. HA-Built-ins (todo-Card, calendar) + wenige
+   eigene. Prinzip bleibt: thin frontend — alles geht auch ohne Cards.
 
-**Project:** `id, name, desired_outcome, status (active|done), due?, task_ids: [],
-created_at, updated_at, completed_at?, stalled (berechnet: aktiv ohne offene next_action)`
+## 4. Domänenmodell (Daten)
 
-**Review:** `id, person, started_at, completed_at?, checklist: {...}` (Checkliste aus DESIGN-v2)
+### 4.1 Item (ein erfasstes Ding)
+```json
+{
+  "id": "uuid", "title": "…", "notes": "…",
+  "status": "inbox|next_action|waiting_for|on_hold|someday_maybe|reference|done",
+  "contexts": ["@telefon"],            // mehrere erlaubt (Entsch. 8b)
+  "project_id": null, "assigned_to": "person.x|null",
+  "due": null, "due_time": null,       // Fälligkeit (Reminder-Quelle)
+  "defer_until": null,                 // Tickler: nicht actionable vor Datum
+  "waiting_for": null, "follow_up_on": null,   // Delegation (Entsch. Waiting For)
+  "repeat": null,                      // {"rule": "daily|weekly|monthly|yearly|weekdays", …}
+  "hold_reason": null,                 // on_hold: warum blockiert (depends_on später)
+  "time_estimate": 15, "energy": 3, "priority": 3,   // für Engage (4 Kriterien)
+  "tags": [], "source": "card|app|service|…",
+  "created_at": "…", "updated_at": "…", "completed_at": null,
+  "reminders": [60, 1440], "overdue_repeat": null, "location": {"zone": "zone.home", "mode": "inside"}
+}
+```
+Invarianten: `waiting_for` ⇒ `waiting_for`-Whom gesetzt; `on_hold` ⇒ `hold_reason`;
+`status=done` ⇒ `completed_at`; Repeat ⇒ beim complete neue Instanz (Entsch. 7).
 
-**Profile (Gamification später):** je person — SPECIAL, Skills, Perks, XP/Level, Karma, Caps.
+### 4.2 Project
+```json
+{"id": "…", "name": "…", "desired_outcome": "…", "due": null,
+ "status": "active|done", "task_ids": [], "created_at": "…", "updated_at": "…", "completed_at": null}
+```
+`stalled` = berechnet: aktiv UND keine offene `next_action` unter task_ids (Entsch. 10).
 
-## 3. Offene technische Entscheidungen (morgen durchgehen)
+### 4.3 Review
+```json
+{"id": "…", "person": "person.x", "started_at": "…", "completed_at": null,
+ "checklist": {"inbox_empty": bool, "waiting_for_followed_up": bool, "projects_reviewed": bool,
+               "next_actions_current": bool, "someday_reviewed": bool, "reference_reviewed": bool,
+               "calendar_checked": bool /* manuell */}}
+```
+Checkliste berechnet aus Timestamps (7-Tage-Fenster, `updated_at`) — v1-Ansatz aus der
+alten Implementierung übernehmen (war dort schon korrekt), erweitert um reference.
 
-1. **Entity-Mapping:** (a) geteilte `todo.gtd_*`-Entities pro Bucket (Companion-App-kompatibel,
-   Better-ToDo-Stil, alter Ansatz) — GTD-Status als Attribut; (b) eine `todo.*`-Entity, Bucket
-   als Attribut; (c) keine todo-Entities, nur Sensoren + Services (Companion-App außen vor).
-   Hinweis: Buckets = Status des Items (entschieden) — spricht für (b)/(c); todo-Kompatibilität
-   spricht für (a).
-2. **Storage:** eine `Store`-JSON (Single Source of Truth, Entities als Spiegel) vs. direkt
-   auf HA-Entities/Storage. Spiegel-Ansatz hält Companion-App kompatibel.
-3. **Multi-User:** geteilte Listen + `assigned_to` (alter Ansatz) vs. pro Person getrennte Bereiche.
-4. **Schreibpfade:** nur Services vs. Services + todo-Entity-Create/Update/Delete (Write-Through).
-5. **UI-Layer:** eigene Cards (10+ Typen wie bisher) vs. so weit wie möglich HA-Built-ins
-   (todo-Card, Kalender-Card) + wenige eigene Cards.
+### 4.4 Status-Machine (Item)
+```
+inbox ──clarify──▶ next_action | waiting_for | someday_maybe | reference | on_hold | done
+                            ▲          │                │
+next_action/on_hold ──set_status──▶ … (jeder Bucket-Wechsel erlaubt)
+waiting_for ──(Nachfass-Datum erreicht/fällig)──▶ next_action (manuell oder Reminder)
+* ──complete──▶ done   (Repeat ⇒ neue Instanz im Ausgangszustand)
+* ──remove──▶ (gelöscht)
+```
 
-## 4. Service-Skizze (prozessnah, tech-neutral benannt)
+## 5. Service-Katalog (prozessnah)
 
-`capture` (→ inbox, typ-los, nur Titel Pflicht) · `clarify` (decision: next_action|project|
-waiting_for|someday|reference|trash|done + Felder: contexts, project, waiting_for, follow_up_on,
-due, defer_until) · `set_status`/`move` (Bucket wechseln) · `complete` · `delegate`
-(→ waiting_for + whom + Nachfass-Datum) · `update` (alle Felder) · `remove` ·
-`create_project`/`update_project`/`remove_project`/`complete_project` (auto: stalled-Erkennung) ·
-`start_review`/`complete_review` · Benachrichtigungen automatisch (due-Reminder, overdue, Zone,
-Summary) · Events für UI.
+| Service | Payload (Kern) | Effekt / Events |
+|---|---|---|
+| `capture` | `title` + optional notes u. a. | Item mit `status=inbox` (immer Inbox, Entsch. 5); Event `item_added` |
+| `clarify` | `item_id`, `decision` (next_action/project/waiting_for/someday_maybe/reference/trash/done), + `contexts`, `project_id`/`project_name`+`desired_outcome`, `waiting_for`, `follow_up_on`, `due`, `defer_until` | Status setzen, ggf. Projekt anlegen, 2-Min-Regel (`done` → complete); Events |
+| `set_status` / `move` | `item_id`, `status` | Bucket-Wechsel; Event |
+| `update_item` | `item_id` + Felder | Update + `updated_at`; Event |
+| `complete` | `item_id` | → `done`, `completed_at`; Repeat → neue Instanz; später XP; Event `item_completed` |
+| `delegate` | `item_id`, `waiting_for`, `follow_up_on` | → `waiting_for`; Event |
+| `remove` | `item_id` | löschen; Event |
+| `create_project` / `update_project` / `remove_project` / `complete_project` | Projekt-Felder | Projekt-CRUD; `complete_project` → Rewards (Gamification später); stalled-Berechnung; Event `project_*` |
+| `start_review` / `complete_review` | `person` | Review-Objekt + Checkliste; Event `review_completed` |
+| `get_state` | `person?` | Snapshot (für Cards/LLM) |
+| (Gamification später) `submit_goat`, `allocate_skill_points`, `choose_perk`, `reset_profile`, `redeem_reward` … | | eigene Schicht |
 
-## 5. Benachrichtigungs-Schicht
+Events: `gamified_gtd_data_updated` (zentral für UI), `item_added/completed/removed`,
+`project_created/updated/completed`, `review_started/completed`, Reminder-Events. **Wichtig
+(Lesson v1):** Listener-Signatur MUSS das Event-Argument akzeptieren (`def h(self, event)`),
+sonst läuft der Listener nie (TypeError im Log).
 
-Eigener Scheduler (wie bisher): due-Reminder (mehrere Vorlaufzeiten), overdue_repeat,
-ortsbasierte „held“-Reminder über zone/person-State, tägliche Summary (konfigurierbare Zeit),
-optional persistent_notification. Alles über `notify.*` der jeweiligen Person.
+## 6. Benachrichtigungs-Schicht (Reminder/Summary)
+- Eigener Scheduler auf `due`+`due_time`: mehrere Vorlauf-Reminder (`reminders: [60, 1440]`),
+  `overdue_repeat` (Wiederholung bei Überfällig), tägliche Summary (konfigurierbare Zeit,
+  optional persistent_notification).
+- Ortsbasiert: `location {zone, mode}` — Reminder wird „gehalten“, bis die Person in der Zone
+  ist (zone/person-State-Tracking, Better-ToDo-Mechanik).
+- Alles pro Person über deren `notify.*`-Service; Zonen-Tracking über `person.*`.
+- **Lesson v1:** Event feuern BEFORE disk write (debounced), sonst UI-Lag; `should_poll=False`
+  bei event-getriebenen Entities.
 
-## 6. UI (später im Detail)
+## 7. Frontend (Cards) — später im Detail, Prinzipien jetzt
+- Theme-aware (CSS-Variablen des HA-Themes), look like built-in cards; FNV-Look nur via
+  Content + Drop-in-Icons (nie Original-Icons ausliefern).
+- Technisch bewährt (Lessons v1): `lit` per dynamischem `import("lit")` + vendored Fallback-
+  Bundle (kein statischer lit-Import — killt sonst das ganze Modul auf HA ohne lit-Importmap);
+  `async_register_static_paths` (plural, API ab 2025.7); `ServiceCall(hass, …)` (hass zuerst);
+  Manifest-Version bei JEDEM JS-Change bumpen (`?v=` Cache-Bust); Card-Editor-Contract:
+  `getConfigElement()` + Editor mit `setConfig()` UND `config`-Property + `config-changed`
+  mit **vollständiger** Config feuern (sonst verschwinden Optionen aus dem YAML).
+- Card-Inventar (v1 hatte 10): Capture/Inbox, Listen-Ansicht (Bucket/Kontext-Filter),
+  Projekte (Pip-Boy-Split: Liste links, Detail rechts), Reference, Review, + Gamification-Cards
+  später (Stats/SPECIAL/Skills/Perks/Levelup/GOAT/Shop).
+- Thin frontend: alles auch ohne Cards über Services/todo-Entities/Sensoren/Events.
 
-Eigene theme-aware Lovelace-Cards: Inbox/Capture, Listen-Ansicht (nach Bucket/Kontext filterbar),
-Projekt/Quest-Ansicht (Pip-Boy-Stil: Liste links, Detail rechts), Reference, Review.
-Alles funktioniert auch ohne Cards über Services + todo-Entities + Sensoren.
+## 8. Gamification (FNV 1:1) — Schicht nach GTD (Design später im Detail)
+Hooks: XP bei `complete` (auch überfällig; on-time +25 %; Karma ±10 %), Quest-Rewards auto
+(Schritt-XP + 25/Schritt + 25 % on-time; Caps = XP/10), SPECIAL (7) → 13 Skills (FNV-Formel,
+Tag!-Skills via G.O.A.T.), 88 Perks alle 2 Level, GECK-XP-Kurve, Level-Cap 30/50,
+HP = 95 + 20×END + 5×Level, Karma, Caps-Shop. Profile je `person.*`.
+Formeln/Daten: siehe Referenz-Implementierung `gamification.py`/`perks_data.py` auf
+`vibe/dev-5adb24` (werden bei der Gamification-Phase neu aufgesetzt, nicht kopiert).
 
-## 7. Gamification (FNV 1:1) — Hooks (Design später)
+## 9. Persistenz, Versionierung, Migration
+- Eine `Store` (`gamified_gtd`, `version: 1`), JSON-Schema siehe §4; Migration bei
+  `version`-Bump; Repair-Routine beim Laden (z. B. Projekt↔Task-Verknüpfungen — Lesson v1:
+  task_ids-Sync bugfix).
+- Store-Writes debounced (`async_delay_save`), UI-Event sofort (Lesson v1).
 
-XP beim `complete` (auch überfällig; on-time +25 %, Karma ±10 %), Quest-Rewards auto
-(Schritt-XP + Bonus, Caps = XP/10), Level/Skill/Perk/SPECIAL je person, G.O.A.T. statt Tag-Skills,
-Reward-Shop gegen Caps, Events. FNV-Original-Icons nie ausliefern (Drop-in-Ordner + Fallbacks).
+## 10. Testing & CI
+- Unit-Tests (pure Logik: Gamification, GOAT, Manager mit Mock-hass), Import-Smoke mit echtem
+  `homeassistant`-Paket, Frontend-Marker-Tests (Cards parsen, keine statischen lit-Imports,
+  Editor-Contract), `validate_integration.py` (services.yaml ↔ consts ↔ strings),
+  `node --check` für www-JS. CI: 4 Jobs (wie v1).
+- Workflow (aktuell mit User abgestimmt): ein Dev-Branch (`vibe/dev-5adb24`), PRs sofort
+  „ready for review“, User testet im HA Integration Tester und merged selbst; Python-Änderungen
+  brauchen vollen HA-Neustart (nicht nur Reload) — Doku-Hinweis.
 
-## 8. Nächste Schritte (morgen)
-
-1. §3-Entscheidungen treffen (Entity-Mapping, Storage, Multi-User, Schreibpfade, UI-Umfang)
-2. Domänenmodell finalisieren (Felder, Status-Machine: inbox → … → done; on_hold)
-3. Service-Liste finalisieren + Events
-4. Dann: Branch anlegen, Skeleton, erste Services + Entities, Tests
+## 11. Offene Fragen für morgen (mit Optionen + Empfehlung)
+1. Entity-Mapping: A (todo-Entity pro Bucket + status-Attribut) / B (eine todo-Entity) / C (nur Sensoren+Services) — **Empfehlung A**
+2. Storage: Store-JSON + Entity-Spiegel (empfohlen) vs. nur Entities
+3. Multi-User: geteilt + assigned_to (empfohlen) vs. pro Person getrennt
+4. Schreibpfade: Services + todo-Write-Through (empfohlen)
+5. UI-Umfang: eigene Cards wie v1 vs. mehr HA-Built-ins
+6. Review-Checkliste: welche Punkte berechnet vs. manuell (calendar manuell)
+7. GTD-Status als Attribut vs. HA-todo-status mapping (needs_action/completed nur)
