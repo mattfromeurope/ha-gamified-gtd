@@ -49,8 +49,9 @@ TASK_FIELDS = {
     vol.Required("task_id"): cv.string,
 }
 
-# add_to_inbox: quick capture with all optional task fields (incl. reminders /
-# location / overdue_repeat for the notification scheduler and the target list).
+# add_to_inbox: quick capture — GTD type-less: ONLY the title is required and the item
+# ALWAYS lands in the inbox; the type/list is decided later at clarify, never at capture
+# (no `list` field here on purpose). Remaining fields are optional metadata.
 ADD_TO_INBOX_SCHEMA = vol.Schema(
     {
         vol.Required("title"): cv.string,
@@ -63,7 +64,6 @@ ADD_TO_INBOX_SCHEMA = vol.Schema(
         vol.Optional("tags"): vol.Any(cv.string, [cv.string]),
         vol.Optional("context"): cv.string,
         vol.Optional("project_id"): cv.string,
-        vol.Optional("list"): vol.In(list(TODO_LISTS)),
         vol.Optional("waiting_for"): cv.string,
         vol.Optional("defer_until"): cv.string,
         vol.Optional("due_time"): cv.string,

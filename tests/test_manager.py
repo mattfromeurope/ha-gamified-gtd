@@ -400,3 +400,18 @@ def test_review_checklist_computed_items():
     mgr.data["tasks"][st["id"]] = st
     mgr._set_task_project(st, pid)
     assert mgr.review_checklist_state()["projects_reviewed"] is True
+
+
+def test_add_to_inbox_is_typeless_always_inbox():
+    """GTD capture is type-less: add_to_inbox ALWAYS lands in the inbox — even if a
+    `list` sneaks into the payload, it is forced to inbox (decided later at clarify)."""
+    mgr = _manager()
+    t = mgr._new_task("x", {})  # not used, just for id shape
+    r = asyncio.run(mgr.add_to_inbox(_call("add_to_inbox", {"title": "Buy milk"})))
+    task = mgr.data["tasks"][r["task_id"]]
+    assert task["list"] == "inbox"
+    # even a forged list in the raw data must not win
+    r2 = asyncio.run(
+        mgr.add_to_inbox(_call("add_to_inbox", {"title": "Direct", "list": "next_actions"}))
+    )
+    assert mgr.data["tasks"][r2["task_id"]]["list"] == "inbox"

@@ -23,7 +23,7 @@ services + events, custom Lovelace card shipped with the integration — the car
 
 | List | Purpose |
 |---|---|
-| `inbox` | Capture everything without thinking |
+| `inbox` | Capture everything without thinking — **type-less**: only the title is required, the item always lands here, the type/list is decided at clarify |
 | `next_actions` | Concrete next actions, optionally with a **context** (`@home`, `@computer`, `@phone`, `@errands`, `@anywhere`, freely extendable) |
 | `waiting_for` | Delegated items / waiting on others (not counted as open quest steps) |
 | `someday_maybe` | Someday/maybe |

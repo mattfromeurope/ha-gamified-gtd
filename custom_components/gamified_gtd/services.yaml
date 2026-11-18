@@ -1,6 +1,6 @@
 add_to_inbox:
   name: Add to inbox
-  description: Quickly capture a new task in the GTD inbox.
+  description: Quickly capture anything in the GTD inbox (type-less — only the title is required). The item always lands in the inbox; clarify decides what it is.
   fields:
     title:
       name: Title
@@ -89,11 +89,8 @@ add_to_inbox:
       name: Project (quest) id
       selector:
         text:
-    list:
-      name: "Target list (default: inbox)"
-      selector:
-        select:
-          options: [inbox, next_actions, waiting_for, someday_maybe]
+  # NOTE: no `list` field on purpose — GTD capture is type-less: items always land in
+  # the inbox; the list/decision is made later at `clarify`.
 
 clarify:
   name: Clarify inbox item

@@ -351,10 +351,10 @@ class GTDManager:
         return task
 
     async def add_to_inbox(self, call: ServiceCall) -> dict[str, Any]:
-        """Quick capture: creates the task in the inbox (or `list` if given)."""
-        task = self._new_task(
-            call.data["title"], {**call.data, "list": call.data.get("list", LIST_INBOX)}
-        )
+        """Quick capture — GTD type-less: the item ALWAYS lands in the inbox, no matter
+        what else is in the payload. Only `title` is required; the type/list/decision
+        happens later at clarify, never at capture."""
+        task = self._new_task(call.data["title"], {**call.data, "list": LIST_INBOX})
         self.data["tasks"][task["id"]] = task
         # Keep the quest side in sync when the task is created WITH a project_id —
         # otherwise project['task_ids'] misses it and quest_progress (x/y) undercounts.
