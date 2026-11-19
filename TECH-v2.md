@@ -188,7 +188,7 @@ Formeln/Daten: siehe Referenz-Implementierung `gamification.py`/`perks_data.py` 
 ### A. Prozess-Feinheiten / Edge Cases (GTD-Ebene)
 - [~] A1 Clarify: Felder pro decision größtenteils klar; ENTSCHIEDEN: `desired_outcome` entfernt (Projektname = Ergebnis, `notes` statt Feld); Projekt anhängen ändert Name/Notizen NICHT; optionaler Projekt-Clarify bei neuer Projekt-Aufgabe (Option `project_clarify_on_new_task`) (next_action: contexts+due?; project: name/outcome; waiting_for: whom+follow_up_on; done/trash/reference/someday: was jeweils gesetzt wird)
 - [x] A2: `done` bleibt sichtbar (filterbar), kein hartes Löschen außer explizitem Nutzer-Löschen (Trash); XP später
-- [x] A3 Delegation: `follow_up_on` PFLICHT; Default +7 Tage, konfigurierbar in Optionen (`default_follow_up_days`). Reminder am Nachfass-Tag automatisch (F4). Offen: am Nachfass-Tag nur Reminder oder Status-Wechsel?
+- [x] A3 Delegation: `follow_up_on` PFLICHT; Default +7 Tage, konfigurierbar in Optionen (`default_follow_up_days`). Reminder am Nachfass-Tag automatisch; ENTSCHIEDEN: nur Reminder + Markierung, kein Auto-Statuswechsel (F4)
 - [ ] A4 Repeat-Regeln: Syntax (daily/weekly/monthly/yearly/weekdays/custom-intervall?), Wann neue Instanz (beim complete), wie wird `due` verschoben, was bei offenem Repeat-Task?
 - [ ] A5 `defer_until` (Tickler): wo wird es "versteckt" (nicht in next_action-Ansicht), Reminder trotzdem?
 - [ ] A6 on_hold: Freigabe manuell oder automatisch (depends_on später)? hold_reason Pflicht?

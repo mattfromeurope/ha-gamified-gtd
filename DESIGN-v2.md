@@ -109,6 +109,15 @@ Quer durch den Baum: **hartes Datum/Uhrzeit?** → Termin.
 - **ENtschieden (A3):** `follow_up_on` ist beim Delegieren **PFLICHT**; gibt der Nutzer keins an,
   greift ein Default von **+7 Tagen**, der in den **Integrations-Optionen** änderbar ist
   (Option z. B. `default_follow_up_days`).
+- **ENtschieden (A3-Rest):** Am Nachfass-Tag (`follow_up_on`) **nur Reminder + Markierung** in der
+  Ansicht — kein automatischer Status-Wechsel (der Mensch entscheidet).
+- **ENtschieden (A4):** Repeat-System wird von **Better ToDo** (Timmes123/ha-better-todo)
+  übernommen (als optimal empfunden): Task-Typen **scheduled** (cron-artig: `freq`
+  daily/weekly/monthly/yearly + `interval` N, mehrere Wochentage, Tag im Monat 1–31/letzter/nter
+  Wochentag, jährlich fixer Tag, optionales Enddatum/max. Wiederholungen, **aktive Monate**)
+  und **after_completion** (Intervall nach Erledigung), **skip** (Vorkommnis überspringen),
+  verpasste Vorkommnisse stapeln nicht („3× due“-Counter, einzeln/alles erledigen),
+  `visible_from` (≈ unser `defer_until`/Tickler).
 - **2-Minuten-Regel:** sofort tun; landet als `done` im System.
 - **ENtschieden (A2):** Erledigte Items bleiben **sichtbar** (optional per Filter ausblendbar);
   kein hartes Löschen — nur auf ausdrücklichen Löschwunsch des Nutzers (Trash).
