@@ -217,7 +217,7 @@ werden abgehakt (`done`) — bei uns später mit XP/Caps (Gamification, eigenes 
 | 1 | Kalender/Termine | Termin = Inbox-Item, Clarify wie 2-Min-Action („in Kalender eintragen“); Kalender extern (Google); Item kann `due`/`due_time` für Reminder |
 | 2 | Horizons of Focus | später klären; v1 nur Projekte + Someday/Maybe |
 | 3 | Trigger-Liste | keine eigene Liste; Trigger-Ideen = Someday/Maybe (ggf. mit Tag) — wie Toodledo/NirvanaHQ |
-| 4 | Natural Planning | nur gewünschtes Ergebnis (desired_outcome) pro Projekt im System; Weg nicht relevant |
+| 4 | Natural Planning | Projektname = gewünschtes Ergebnis (Allen); KEIN desired_outcome-Feld, stattdessen Projekt-`notes` |
 | 5 | Inbox | typ-los: nur Titel Pflicht, landet immer in der Inbox |
 | 6 | Abhängigkeiten | on-hold-Status (blockiert sichtbar); depends_on-Auto-Freigabe erst technisch später |
 | 7 | Wiederholungen | Repeat-Regeln an der Action; ≠ Termine; neue Instanz beim Erledigen |
