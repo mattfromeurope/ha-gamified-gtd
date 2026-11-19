@@ -53,7 +53,10 @@ CAPTURE → CLARIFY → ORGANIZE → REFLECT → ENGAGE
 Gedanken, Aufgaben, Termine, Ideen, Unterlagen, physische Dinge. Beim Erfassen wird NICHT
 entschieden, was es ist.
 
-- **ENtschieden (typ-los):** In der Inbox ist alles typ-los; das Item landet immer in der Inbox.
+- **ENtschiedene HARTREGEL:** ausnahmslos JEDE Erfassung landet zuallererst in der Inbox —
+  egal über welchen Weg (Service, todo-Entity, Card, Widget, Assist). Auch ein direkt in einer
+  anderen Liste angelegtes todo-Item wird intern in die Inbox umgeleitet. Typ-los: Status wird
+  erst beim Clarify entschieden.
   Typ/Status wird erst beim Clarify entschieden.
 - **ENtschieden (Capture-Felder, Friction-Prinzip §0.0):** Pflicht = **Titel** allein;
   optional direkt beim Capture: **Notiz** und **Datum** (`due`). Nichts sonst.
