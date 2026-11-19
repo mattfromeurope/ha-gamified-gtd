@@ -167,7 +167,7 @@ Quer durch den Baum: **hartes Datum/Uhrzeit?** → Termin.
   bleiben bewusst außerhalb des Systems.
 - **ENtschieden (d):** **Stalled Projects** (aktives Projekt ohne offene next_action) werden
   markiert → Review-Punkt.
-- Tickler: `defer_until` („nicht actionable vor Datum“) — getrennt von `due` (Fälligkeit).
+- Datums-Felder (ENtschieden A5/A13): `due`+`due_time` = **Fälligkeit** (Reminder, overdue); `scheduled_on`+`scheduled_time` = **geplante Ausführung** einer Next Action (weich, Reminder zum Termin); `follow_up_on` = **Wiedervorlage/Nachfass** (Reminder + Markierung; `defer_until` entfällt, Tickler = follow_up_on).
 
 ### 3.1 Reference — eigene, offene Ablage (ENtschieden)
 Reference ist NICHT „nicht actionable Rest“, sondern **alles, was als Referenz für Aufgaben,

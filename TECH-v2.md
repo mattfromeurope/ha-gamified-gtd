@@ -63,9 +63,9 @@ E-Mail-Integration, keine FNV-Original-Icons (Copyright — Drop-in-Ordner + Fal
   "status": "inbox|next_action|waiting_for|on_hold|someday_maybe|reference|done",
   "contexts": ["@telefon"],            // mehrere erlaubt (Entsch. 8b)
   "project_id": null, "assigned_to": "person.x|null",
-  "due": null, "due_time": null,       // Fälligkeit (Reminder-Quelle)
-  "defer_until": null,                 // Tickler: nicht actionable vor Datum
-  "waiting_for": null, "follow_up_on": null,   // Delegation (Entsch. Waiting For)
+  "due": null, "due_time": null,       // Fälligkeit/Deadline (Reminder, overdue)
+  "scheduled_on": null, "scheduled_time": null, // geplante Ausführung (weich, Reminder zum Termin)
+  "waiting_for": null, "follow_up_on": null,   // Delegation + Wiedervorlage/Nachfass (defer_until merged into follow_up_on)
   "repeat": null,                      // {"rule": "daily|weekly|monthly|yearly|weekdays", …}
   "hold_reason": null,                 // on_hold: warum blockiert (depends_on später)
   "time_estimate": 15, "energy": 3, "priority": 3,   // für Engage (4 Kriterien)
@@ -109,7 +109,7 @@ waiting_for ──(Nachfass-Datum erreicht/fällig)──▶ next_action (manuel
 | Service | Payload (Kern) | Effekt / Events |
 |---|---|---|
 | `capture` | `title` + optional notes u. a. | Item mit `status=inbox` (immer Inbox, Entsch. 5); Event `item_added` |
-| `clarify` | `item_id`, `decision` (next_action/project/waiting_for/someday_maybe/reference/trash/done), + `contexts`, `project_id`/`project_name`, `waiting_for`, `follow_up_on`, `due`, `defer_until` | Status setzen, ggf. Projekt anlegen, 2-Min-Regel (`done` → complete); Events |
+| `clarify` | `item_id`, `decision` (next_action/project/waiting_for/someday_maybe/reference/trash/done), + `contexts`, `project_id`/`project_name`, `waiting_for`, `follow_up_on`, `due`, `scheduled_on` | Status setzen, ggf. Projekt anlegen, 2-Min-Regel (`done` → complete); Events |
 | `set_status` / `move` | `item_id`, `status` | Bucket-Wechsel; Event |
 | `update_item` | `item_id` + Felder | Update + `updated_at`; Event |
 | `complete` | `item_id` | → `done`, `completed_at`; Repeat → neue Instanz; später XP; Event `item_completed` |
@@ -190,7 +190,7 @@ Formeln/Daten: siehe Referenz-Implementierung `gamification.py`/`perks_data.py` 
 - [x] A2: `done` bleibt sichtbar (filterbar), kein hartes Löschen außer explizitem Nutzer-Löschen (Trash); XP später
 - [x] A3 Delegation: `follow_up_on` PFLICHT; Default +7 Tage, konfigurierbar in Optionen (`default_follow_up_days`). Reminder am Nachfass-Tag automatisch; ENTSCHIEDEN: nur Reminder + Markierung, kein Auto-Statuswechsel (F4)
 - [ ] A4 Repeat-Regeln: Syntax (daily/weekly/monthly/yearly/weekdays/custom-intervall?), Wann neue Instanz (beim complete), wie wird `due` verschoben, was bei offenem Repeat-Task?
-- [ ] A5 `defer_until` (Tickler): wo wird es "versteckt" (nicht in next_action-Ansicht), Reminder trotzdem?
+- [x] A5: NICHT übernommen (kein Verstecken). `defer_until` entfällt; Tickler/Wiedervorlage = `follow_up_on` (Reminder + Markierung, nie versteckt)
 - [ ] A6 on_hold: Freigabe manuell oder automatisch (depends_on später)? hold_reason Pflicht?
 - [ ] A7 Projekt: auto-complete wenn alle Schritte done? (v1: ja) oder nur manuell?
 - [ ] A8 stalled: exakte Definition (aktiv + keine offene next_action), Anzeige/Markierung wo?
@@ -198,7 +198,7 @@ Formeln/Daten: siehe Referenz-Implementierung `gamification.py`/`perks_data.py` 
 - [ ] A10 Reference: Felder (kind, url, file, tags, links zu projekt/task), Suche/Filter, Review-Punkt
 - [ ] A11 Kontexte: Default-Liste, editierbar wo (Optionen), mehrere pro Item, Filter-Logik in Ansichten
 - [x] A12 Capture v1: HARTREGEL — JEDE Erfassung landet zuerst in der Inbox (auch todo-Entity-Anlagen in anderen Listen werden intern umgeleitet). Pflicht = Titel; optional Notiz + Datum. Quellen: Service, todo-Entity, Card, Widget, Assist. Foto/PDF/Audio: NICHT v1
-- [ ] A13 `due` vs `defer_until` vs `follow_up_on`: Semantik-Grenzen, Reminder-Verhalten je Feld
+- [x] A13: Datumsfelder = `due`/`due_time` (Fälligkeit) + `scheduled_on`/`scheduled_time` (geplante Ausführung, Next Action) + `follow_up_on` (Wiedervorlage/Nachfass). `defer_until` entfernt.
 - [ ] A14 Priorität/Energie/Zeit: Defaults (Optionen), Skalen (1–5), wo sichtbar (Engage-Ansicht)
 
 ### B. Datenmodell (feldweise)
