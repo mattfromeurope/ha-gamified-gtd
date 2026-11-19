@@ -180,3 +180,80 @@ Formeln/Daten: siehe Referenz-Implementierung `gamification.py`/`perks_data.py` 
 5. UI-Umfang: eigene Cards wie v1 vs. mehr HA-Built-ins
 6. Review-Checkliste: welche Punkte berechnet vs. manuell (calendar manuell)
 7. GTD-Status als Attribut vs. HA-todo-status mapping (needs_action/completed nur)
+
+---
+
+## 12. Detail-Checkliste fürs kleinteilige Durchgehen (JEDER Punkt wird einzeln entschieden)
+
+### A. Prozess-Feinheiten / Edge Cases (GTD-Ebene)
+- [ ] A1 Clarify: exakte Felder pro `decision` (next_action: contexts+due?; project: name/outcome; waiting_for: whom+follow_up_on; done/trash/reference/someday: was jeweils gesetzt wird)
+- [ ] A2 2-Minuten-Regel: `done` sofort — Historie sichtbar? XP später ja
+- [ ] A3 Delegation: `follow_up_on` — Reminder automatisch? was passiert am Nachfass-Tag (Status-Wechsel? nur Reminder)?
+- [ ] A4 Repeat-Regeln: Syntax (daily/weekly/monthly/yearly/weekdays/custom-intervall?), Wann neue Instanz (beim complete), wie wird `due` verschoben, was bei offenem Repeat-Task?
+- [ ] A5 `defer_until` (Tickler): wo wird es "versteckt" (nicht in next_action-Ansicht), Reminder trotzdem?
+- [ ] A6 on_hold: Freigabe manuell oder automatisch (depends_on später)? hold_reason Pflicht?
+- [ ] A7 Projekt: auto-complete wenn alle Schritte done? (v1: ja) oder nur manuell?
+- [ ] A8 stalled: exakte Definition (aktiv + keine offene next_action), Anzeige/Markierung wo?
+- [ ] A9 Weekly Review: Checkliste — jeder Punkt: berechnet aus welchen Feldern (7-Tage-Fenster?) oder manuell; Reihenfolge; Review-Fälligkeit (7 Tage); was passiert bei überfälliger Review (Karma später)
+- [ ] A10 Reference: Felder (kind, url, file, tags, links zu projekt/task), Suche/Filter, Review-Punkt
+- [ ] A11 Kontexte: Default-Liste, editierbar wo (Optionen), mehrere pro Item, Filter-Logik in Ansichten
+- [ ] A12 Capture-Quellen: Service, todo-Entity, App — gleiche Logik?
+- [ ] A13 `due` vs `defer_until` vs `follow_up_on`: Semantik-Grenzen, Reminder-Verhalten je Feld
+- [ ] A14 Priorität/Energie/Zeit: Defaults (Optionen), Skalen (1–5), wo sichtbar (Engage-Ansicht)
+
+### B. Datenmodell (feldweise)
+- [ ] B1 Item: jedes Feld — Name, Typ, Default, Pflicht, Validierung, wo exponiert (Entity-Attribut? Sensor?)
+- [ ] B2 Status-Enum + erlaubte Transitionen (Tabelle) + Event je Transition
+- [ ] B3 Project: Felder + Invarianten (task_ids-Sync beidseitig! Lesson v1)
+- [ ] B4 Review: Felder + Checklisten-Logik pro Punkt
+- [ ] B5 IDs (uuid4?), Timestamps (ISO local, tz), created_at/updated_at — wer setzt updated_at (Lesson v1: _touch)
+- [ ] B6 Profile (Gamification später): Felder grob
+
+### C. Services (jeder einzeln: Schema, Selektoren, Validierung, Response, Events, Side Effects, Fehlerfälle)
+- [ ] C1 capture  C2 clarify  C3 set_status/move  C4 update_item  C5 complete  C6 delegate  C7 remove
+- [ ] C8 create_project  C9 update_project  C10 remove_project  C11 complete_project  C12 add_to_project?
+- [ ] C13 start_review  C14 complete_review  C15 get_state
+- [ ] C16 todo-Entity-Write-Through (create/update/delete item → interner Service-Aufruf; Lesson v1: ServiceCall(hass, …))
+- [ ] C17 (später) Gamification-Services
+
+### D. Entities
+- [ ] D1 Welche Entities (todo pro Bucket vs. eine vs. Sensoren) — siehe §3
+- [ ] D2 Attribute je Entity (todo_items-Dict + Metadaten; Lesson v1: HA exponiert todo_items NICHT selbst)
+- [ ] D3 should_poll=False + Event-Listener MIT Event-Argument (Lesson v1!)
+- [ ] D4 unique_id, device_info, Icons
+- [ ] D5 Sensoren pro Person (Level später; GTD: quest log, review state…)
+
+### E. Events (Katalog mit Payload-Schema)
+- [ ] E1 data_updated (zentral)  E2 item_*  E3 project_*  E4 review_*  E5 reminder_*
+
+### F. Benachrichtigungen
+- [ ] F1 Scheduler: wann armen/neu armen (data_updated), Timer-Logik
+- [ ] F2 due-Reminder (Offsets), F3 overdue_repeat, F4 follow_up_on-Reminder, F5 Tickler-Reminder
+- [ ] F6 Zonen-"held"-Reminder (person betritt/verlässt Zone)
+- [ ] F7 tägliche Summary (Zeit, Inhalt, notify vs persistent_notification)
+- [ ] F8 notify-Mapping pro Person (Optionen)
+
+### G. Storage
+- [ ] G1 Store-Key/Version, Schema, Migration, Repair beim Laden (Lesson v1: task_ids-Sync)
+- [ ] G2 Save-Strategie: Event sofort, Disk debounced (Lesson v1), Flush bei Shutdown
+
+### H. Config Flow / Optionen
+- [ ] H1 Setup-Schritte: Personen (multi), Kontexte (Default editierbar), Defaults (time/energy), notify-Services, Summary an/aus+Zeit, Level-Cap (Gamification später)
+- [ ] H2 Validierung, H3 Options-Änderung live (reload?
+
+### I. Frontend (Cards)
+- [ ] I1 Card-Inventar + je Card: Layout, Config, GUI-Editor (Lesson v1: setConfig + config + config-changed mit VOLLER Config)
+- [ ] I2 lit-Lade-Mechanik (dynamic import + vendored Fallback, Lesson v1), static path (plural), ?v= Cache-Bust bei jedem JS-Change (Lesson v1)
+- [ ] I3 theme-aware CSS, Icon-Drop-in-Policy (nie FNV-Originale)
+- [ ] I4 HA-Built-ins zusätzlich nutzbar (todo-Card, calendar)
+
+### J. Multi-User
+- [ ] J1 assigned_to-Semantik, "me"-Auflösung (user_id→person), unassigned = alle?
+- [ ] J2 geteilte vs. pro-Person-Bereiche (Empfehlung: geteilt + assigned_to)
+- [ ] J3 Review pro Person
+
+### K. Sicherheit/Privacy
+- [ ] K1 Storage private, keine externen Calls, Icon-Policy
+
+### L. Testing/CI/Doku/Rollout
+- [ ] L1 Unit/Smoke/Frontend-Marker/validate + CI-Jobs, L2 README/DESIGN/CONTRIBUTING/services.yaml-Strings, L3 HACS, Versionsschema, L4 Branch-/PR-Workflow (Dev-Branch, PR sofort ready, User merged nach Test; Python braucht HA-Neustart)
