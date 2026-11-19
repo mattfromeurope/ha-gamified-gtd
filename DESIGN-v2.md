@@ -117,7 +117,7 @@ Quer durch den Baum: **hartes Datum/Uhrzeit?** → Termin.
   Wochentag, jährlich fixer Tag, optionales Enddatum/max. Wiederholungen, **aktive Monate**)
   und **after_completion** (Intervall nach Erledigung), **skip** (Vorkommnis überspringen),
   verpasste Vorkommnisse stapeln nicht („3× due“-Counter, einzeln/alles erledigen),
-  `visible_from` (≈ unser `defer_until`/Tickler).
+  `visible_from` (NICHT übernommen; Tickler = `follow_up_on`).
 - **2-Minuten-Regel:** sofort tun; landet als `done` im System.
 - **ENtschieden (A2):** Erledigte Items bleiben **sichtbar** (optional per Filter ausblendbar);
   kein hartes Löschen — nur auf ausdrücklichen Löschwunsch des Nutzers (Trash).
@@ -149,7 +149,7 @@ Quer durch den Baum: **hartes Datum/Uhrzeit?** → Termin.
 | Status/Bucket | Inhalt | Pflicht/Regeln |
 |---|---|---|
 | `inbox` | rohes, unentschiedenes Capture | nur Titel nötig |
-| `next_action` | nächste physische Schritte | **Kontext(e)**; bei Projekt: Projekt-Ref; optional due/defer_until |
+| `next_action` | nächste physische Schritte | **Kontext(e)**; bei Projekt: Projekt-Ref; optional due / scheduled_on / follow_up_on |
 | `waiting_for` | delegiert | `waiting_for` (wen) + `follow_up_on` (Nachfass-Datum) |
 | `on_hold` | blockiert/abhängig | Grund/Vorgänger notieren |
 | `someday_maybe` | inkubierte Ideen + Trigger-Ideen | – |
@@ -252,6 +252,6 @@ werden abgehakt (`done`) — bei uns später mit XP/Caps (Gamification, eigenes 
 - **Project:** gewünschtes Ergebnis mit > 1 Action-Schritt
 - **Context:** Ort/Werkzeug („@Telefon“), unter dem eine Action ausführbar ist
 - **Waiting For:** delegierte Action + „wen“ + Nachfass-Datum
-- **Tickler:** `defer_until` — „nicht vor Datum X actionable“
+- **Wiedervorlage/Tickler:** `follow_up_on` — Reminder + Markierung am Tag, Item bleibt sichtbar (nie versteckt)
 - **Stalled Project:** aktives Projekt ohne offene Next Action
 - **Weekly Review:** wöchentliches Durch-checken aller Listen (Vertrauensanker)
