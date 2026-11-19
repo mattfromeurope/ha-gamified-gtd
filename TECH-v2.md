@@ -197,7 +197,7 @@ Formeln/Daten: siehe Referenz-Implementierung `gamification.py`/`perks_data.py` 
 - [ ] A9 Weekly Review: Checkliste — jeder Punkt: berechnet aus welchen Feldern (7-Tage-Fenster?) oder manuell; Reihenfolge; Review-Fälligkeit (7 Tage); was passiert bei überfälliger Review (Karma später)
 - [ ] A10 Reference: Felder (kind, url, file, tags, links zu projekt/task), Suche/Filter, Review-Punkt
 - [ ] A11 Kontexte: Default-Liste, editierbar wo (Optionen), mehrere pro Item, Filter-Logik in Ansichten
-- [ ] A12 Capture-Quellen: Service, todo-Entity, App — gleiche Logik?
+- [x] A12 Capture v1: Pflicht = Titel; optional Notiz + Datum. Quellen: Service, todo-Entity, Card, Widget, Assist — gleiche Logik (immer Inbox). Foto/PDF/Audio+Transkription: NICHT v1 (Zukunftsidee)
 - [ ] A13 `due` vs `defer_until` vs `follow_up_on`: Semantik-Grenzen, Reminder-Verhalten je Feld
 - [ ] A14 Priorität/Energie/Zeit: Defaults (Optionen), Skalen (1–5), wo sichtbar (Engage-Ansicht)
 

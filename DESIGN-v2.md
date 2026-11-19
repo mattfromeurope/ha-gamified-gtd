@@ -53,8 +53,12 @@ CAPTURE → CLARIFY → ORGANIZE → REFLECT → ENGAGE
 Gedanken, Aufgaben, Termine, Ideen, Unterlagen, physische Dinge. Beim Erfassen wird NICHT
 entschieden, was es ist.
 
-- **ENtschieden (typ-los):** In der Inbox ist alles typ-los. Nur der Titel ist Pflicht; das Item
-  landet immer in der Inbox. Typ/Status wird erst beim Clarify entschieden.
+- **ENtschieden (typ-los):** In der Inbox ist alles typ-los; das Item landet immer in der Inbox.
+  Typ/Status wird erst beim Clarify entschieden.
+- **ENtschieden (Capture-Felder, Friction-Prinzip §0.0):** Pflicht = **Titel** allein;
+  optional direkt beim Capture: **Notiz** und **Datum** (`due`). Nichts sonst.
+- **Zukünftige Ideen (NICHT v1):** Capture von Fotos/PDFs (physische Notizen/Papiere) und
+  Audioaufnahmen + Transkription — ausdrücklich für v1 ausgeschlossen, nur vorgemerkt.
 - Beim ersten Einrichten: **„Mind Sweep“** — alle offenen Punkte einmalig aufsammeln und in die
   Inbox kippen (Buch: Kapitel „Getting Everything Out of Your Head“).
 - Capture-Quellen: alles, was schnell geht — HA-App, Widget, Service, Sprachassistent,
@@ -215,6 +219,7 @@ werden abgehakt (`done`) — bei uns später mit XP/Caps (Gamification, eigenes 
 - Kein HA-Kalender-Abgleich/Spiegel (Kalender extern)
 - Keine Horizons-of-Focus-Objekte (später)
 - Keine E-Mail-/Messenger-Integration als Capture-Quelle (nur HA-interne Quellen)
+- v1 KEIN Foto/PDF-Capture, KEIN Audio/Transkription (nur als zukünftige Idee vorgemerkt)
 - Gamification (FNV) ist eigenes Kapitel in TECH-v2, kommt nach der reinen GTD-Umsetzung
 
 ## 8. Glossar
