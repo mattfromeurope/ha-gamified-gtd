@@ -188,7 +188,7 @@ Formeln/Daten: siehe Referenz-Implementierung `gamification.py`/`perks_data.py` 
 ### A. Prozess-Feinheiten / Edge Cases (GTD-Ebene)
 - [ ] A1 Clarify: exakte Felder pro `decision` (next_action: contexts+due?; project: name/outcome; waiting_for: whom+follow_up_on; done/trash/reference/someday: was jeweils gesetzt wird)
 - [ ] A2 2-Minuten-Regel: `done` sofort — Historie sichtbar? XP später ja
-- [ ] A3 Delegation: `follow_up_on` — Reminder automatisch? was passiert am Nachfass-Tag (Status-Wechsel? nur Reminder)?
+- [x] A3 Delegation: `follow_up_on` PFLICHT; Default +7 Tage, konfigurierbar in Optionen (`default_follow_up_days`). Reminder am Nachfass-Tag automatisch (F4). Offen: am Nachfass-Tag nur Reminder oder Status-Wechsel?
 - [ ] A4 Repeat-Regeln: Syntax (daily/weekly/monthly/yearly/weekdays/custom-intervall?), Wann neue Instanz (beim complete), wie wird `due` verschoben, was bei offenem Repeat-Task?
 - [ ] A5 `defer_until` (Tickler): wo wird es "versteckt" (nicht in next_action-Ansicht), Reminder trotzdem?
 - [ ] A6 on_hold: Freigabe manuell oder automatisch (depends_on später)? hold_reason Pflicht?
