@@ -109,7 +109,9 @@ Quer durch den Baum: **hartes Datum/Uhrzeit?** → Termin.
 - **ENtschieden (A3):** `follow_up_on` ist beim Delegieren **PFLICHT**; gibt der Nutzer keins an,
   greift ein Default von **+7 Tagen**, der in den **Integrations-Optionen** änderbar ist
   (Option z. B. `default_follow_up_days`).
-- **2-Minuten-Regel:** sofort tun; landet als `done` im System (sichtbar, später XP).
+- **2-Minuten-Regel:** sofort tun; landet als `done` im System.
+- **ENtschieden (A2):** Erledigte Items bleiben **sichtbar** (optional per Filter ausblendbar);
+  kein hartes Löschen — nur auf ausdrücklichen Löschwunsch des Nutzers (Trash).
 - **Next Action:** muss ein physischer, sichtbarer Schritt sein, den man „sehen“ kann.
 - **Project:** jedes gewünschte Ergebnis mit mehr als einem Action-Schritt.
 
