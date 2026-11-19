@@ -257,3 +257,12 @@ Formeln/Daten: siehe Referenz-Implementierung `gamification.py`/`perks_data.py` 
 
 ### L. Testing/CI/Doku/Rollout
 - [ ] L1 Unit/Smoke/Frontend-Marker/validate + CI-Jobs, L2 README/DESIGN/CONTRIBUTING/services.yaml-Strings, L3 HACS, Versionsschema, L4 Branch-/PR-Workflow (Dev-Branch, PR sofort ready, User merged nach Test; Python braucht HA-Neustart)
+
+### N. Nutzungsfreundlichkeit / geringe Reibung (oberstes Prinzip, siehe DESIGN-v2 §0.0)
+- [ ] N1 Capture: 1-Tap/1-Satz von überall (Service, todo-Entity, Card, Widget, Assist), nur Titel Pflicht, sofortiges Feedback
+- [ ] N2 Clarify: Schritt-für-Schritt-Dialog, Defaults vorausgefüllt, keine Sammel-Formulare
+- [ ] N3 Ansichten: ruhig/klar, Fokus-Ansicht („jetzt“), keine Überflutung
+- [ ] N4 Review: geführte Checkliste
+- [ ] N5 Benachrichtigungen: nie spammy, snooze/einfach ausblendbar
+- [ ] N6 Gamification später: motivierend, nie zusätzliche Pflicht-Schritte
+- [ ] N7 forgiving: Trash statt hart löschen, Undo wo möglich, konsistente Patterns

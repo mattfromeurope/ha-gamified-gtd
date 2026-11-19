@@ -9,6 +9,22 @@ sind dem Buch entnommen; eigene Entscheidungen sind als **ENtschieden** markiert
 
 ---
 
+## 0.0 OBERSTES DESIGNPRINZIP (User, neurodivers — ADHS + Autismus): minimale Reibung
+
+**Je niedriger die Hürde/der Aufwand, desto eher wird das System benutzt und desto eher
+halten die GTD-Prinzipien.** Umgekehrt: jeder zusätzliche Klick/jedes Pflichtfeld ist ein
+„Schmerzfaktor“, der bei ADHS/Autismus schnell zum Abbruch führt.
+
+Daraus abgeleitete Regeln für ALLE Phasen (Capture→Erledigung) und die gesamte Technik/UI:
+- Capture: **ein** Feld (Titel) genügt, überall 1-Tap/1-Satz (Card, App, Widget, Assist);
+  sofortiges Feedback („erfasst ✓“), keine Dialog-Ketten, keine Pflichtfelder außer Titel
+- Clarify: geleitet, **ein Schritt nach dem anderen**, Defaults vorausgefüllt, nie alles auf einmal
+- Listen/Ansichten: ruhig, klar gegliedert, keine Informations-Überflutung; „Fokus“-Ansichten
+- Review: geführte Checkliste statt Blanko-Seite
+- Benachrichtigungen: hilfreich, nie spammy; leicht snoozen/ausblenden
+- Gamification (später) darf motivieren, aber nie zusätzliche Pflicht-Schritte erzeugen
+- Generell: keine versteckten Mehrklick-Aktionen, konsistente Patterns, forgiving (undo/„trash“ statt löschen)
+
 ## 0. Grundprinzipien von GTD (warum das System so aufgebaut ist)
 
 1. **Open Loops** — alles, was deine Aufmerksamkeit bindet, aber noch nicht „erledigt/abgelegt"
