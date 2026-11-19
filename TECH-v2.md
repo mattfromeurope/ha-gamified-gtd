@@ -79,7 +79,7 @@ Invarianten: `waiting_for` ⇒ `waiting_for`-Whom gesetzt; `on_hold` ⇒ `hold_r
 
 ### 4.2 Project
 ```json
-{"id": "…", "name": "…", "desired_outcome": "…", "due": null,
+{"id": "…", "name": "…" /* = gewünschtes Ergebnis, ergebnisorientiert (Allen) */, "notes": "…" /* Vision/Support — ersetzt desired_outcome (ENTSCHEIDEN) */, "due": null,
  "status": "active|done", "task_ids": [], "created_at": "…", "updated_at": "…", "completed_at": null}
 ```
 `stalled` = berechnet: aktiv UND keine offene `next_action` unter task_ids (Entsch. 10).
@@ -109,7 +109,7 @@ waiting_for ──(Nachfass-Datum erreicht/fällig)──▶ next_action (manuel
 | Service | Payload (Kern) | Effekt / Events |
 |---|---|---|
 | `capture` | `title` + optional notes u. a. | Item mit `status=inbox` (immer Inbox, Entsch. 5); Event `item_added` |
-| `clarify` | `item_id`, `decision` (next_action/project/waiting_for/someday_maybe/reference/trash/done), + `contexts`, `project_id`/`project_name`+`desired_outcome`, `waiting_for`, `follow_up_on`, `due`, `defer_until` | Status setzen, ggf. Projekt anlegen, 2-Min-Regel (`done` → complete); Events |
+| `clarify` | `item_id`, `decision` (next_action/project/waiting_for/someday_maybe/reference/trash/done), + `contexts`, `project_id`/`project_name`, `waiting_for`, `follow_up_on`, `due`, `defer_until` | Status setzen, ggf. Projekt anlegen, 2-Min-Regel (`done` → complete); Events |
 | `set_status` / `move` | `item_id`, `status` | Bucket-Wechsel; Event |
 | `update_item` | `item_id` + Felder | Update + `updated_at`; Event |
 | `complete` | `item_id` | → `done`, `completed_at`; Repeat → neue Instanz; später XP; Event `item_completed` |

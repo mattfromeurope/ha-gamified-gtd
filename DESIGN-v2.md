@@ -88,10 +88,10 @@ Pro Inbox-Item werden genau diese Fragen in dieser Reihenfolge durchgegangen:
                          └─ JA ── 4. Was ist der nächste physische, sichtbare Schritt?
                                     (z. B. „X anrufen“, NICHT „Vertrag abschließen“)
                                     ├─ Ergebnis braucht > 1 Schritt → PROJECT
-                                    │   (gewünschtes Ergebnis definieren + erster Schritt
+                                    │   (Projekt mit ergebnisorientiertem Namen anlegen + erster Schritt
                                     │    als Next Action mit Projekt-Referenz)
 - **ENtschieden (A1/Project):** Wird ein Item an ein **bestehendes** Projekt angehängt, bleibt dessen
-  `desired_outcome` unangetastet. Stattdessen kann ein **Projekt-Clarify** angestoßen werden
+  Name/Notizen unangetastet. Stattdessen kann ein **Projekt-Clarify** angestoßen werden
   (Projektdetails prüfen/bearbeiten, wenn ein Projekt eine neue Aufgabe erhält) — dieser Schritt
   ist in den **Integrations-Optionen ein-/ausschaltbar** (z. B. `project_clarify_on_new_task`).
                                     └─ sonst → Next Action (+ Kontext, ggf. Fälligkeit/Tickler)
@@ -148,10 +148,12 @@ Quer durch den Baum: **hartes Datum/Uhrzeit?** → Termin.
 - **ENtschieden (a):** Kontexte = **freie Liste mit Standardvorgaben** (@Telefon, @Computer,
   @Büro, @Errands, @Anywhere …), Nutzer kann ändern/löschen/ergänzen (in den Optionen).
 - **ENtschieden (b):** ein Item kann **mehrere Kontexte** haben (Liste).
-- **Projekte:** eigenes Objekt mit `name`, **`desired_outcome` (gewünschtes Ergebnis)**, `due?`,
-  Status, `task_ids` (die Actions des Projekts). **ENtschieden (Frage 4 / Natural Planning):**
-  nur das gewünschte Ergebnis wird im System festgehalten; Zweck/Vision/Brainstorming/Struktur
-  (Allens Natural-Planning-Schritte) sind NICHT Systembestandteil.
+- **Projekte:** eigenes Objekt mit `name`, **`notes`** (frei: Vision/Support-Material; Projektname = Ergebnis, s. u.), `due?`,
+  Status, `task_ids` (die Actions des Projekts).
+  **ENtschieden (Frage 4 + Folgefrage):** Natural Planning im System = nur der **Projektname**
+  (ergebnisorientiert, das IS das gewünschte Ergebnis bei Allen); es gibt **kein `desired_outcome`-Feld** —
+  Vision/Detail/Support kommt in die Projekt-**Notizen**. Zweck/Prinzipien/Brainstorming/Struktur
+  bleiben bewusst außerhalb des Systems.
 - **ENtschieden (d):** **Stalled Projects** (aktives Projekt ohne offene next_action) werden
   markiert → Review-Punkt.
 - Tickler: `defer_until` („nicht actionable vor Datum“) — getrennt von `due` (Fälligkeit).
