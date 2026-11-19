@@ -90,6 +90,10 @@ Pro Inbox-Item werden genau diese Fragen in dieser Reihenfolge durchgegangen:
                                     ├─ Ergebnis braucht > 1 Schritt → PROJECT
                                     │   (gewünschtes Ergebnis definieren + erster Schritt
                                     │    als Next Action mit Projekt-Referenz)
+- **ENtschieden (A1/Project):** Wird ein Item an ein **bestehendes** Projekt angehängt, bleibt dessen
+  `desired_outcome` unangetastet. Stattdessen kann ein **Projekt-Clarify** angestoßen werden
+  (Projektdetails prüfen/bearbeiten, wenn ein Projekt eine neue Aufgabe erhält) — dieser Schritt
+  ist in den **Integrations-Optionen ein-/ausschaltbar** (z. B. `project_clarify_on_new_task`).
                                     └─ sonst → Next Action (+ Kontext, ggf. Fälligkeit/Tickler)
 ```
 

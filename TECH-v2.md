@@ -186,7 +186,7 @@ Formeln/Daten: siehe Referenz-Implementierung `gamification.py`/`perks_data.py` 
 ## 12. Detail-Checkliste fürs kleinteilige Durchgehen (JEDER Punkt wird einzeln entschieden)
 
 ### A. Prozess-Feinheiten / Edge Cases (GTD-Ebene)
-- [ ] A1 Clarify: exakte Felder pro `decision` (next_action: contexts+due?; project: name/outcome; waiting_for: whom+follow_up_on; done/trash/reference/someday: was jeweils gesetzt wird)
+- [~] A1 Clarify: Felder pro decision größtenteils klar; ENTSCHIEDEN: Projekt anhängen ändert desired_outcome NICHT, optionaler Projekt-Clarify bei neuer Projekt-Aufgabe (Option `project_clarify_on_new_task`). Offen: desired_outcome bei NEUEM Projekt Pflicht oder Default=Titel? (next_action: contexts+due?; project: name/outcome; waiting_for: whom+follow_up_on; done/trash/reference/someday: was jeweils gesetzt wird)
 - [ ] A2 2-Minuten-Regel: `done` sofort — Historie sichtbar? XP später ja
 - [x] A3 Delegation: `follow_up_on` PFLICHT; Default +7 Tage, konfigurierbar in Optionen (`default_follow_up_days`). Reminder am Nachfass-Tag automatisch (F4). Offen: am Nachfass-Tag nur Reminder oder Status-Wechsel?
 - [ ] A4 Repeat-Regeln: Syntax (daily/weekly/monthly/yearly/weekdays/custom-intervall?), Wann neue Instanz (beim complete), wie wird `due` verschoben, was bei offenem Repeat-Task?
@@ -238,7 +238,7 @@ Formeln/Daten: siehe Referenz-Implementierung `gamification.py`/`perks_data.py` 
 - [ ] G2 Save-Strategie: Event sofort, Disk debounced (Lesson v1), Flush bei Shutdown
 
 ### H. Config Flow / Optionen
-- [ ] H1 Setup-Schritte: Personen (multi), Kontexte (Default editierbar), Defaults (time/energy), notify-Services, Summary an/aus+Zeit, Level-Cap (Gamification später)
+- [ ] H1 Setup/Optionen: Personen (multi), Kontexte (Default editierbar), Defaults (time/energy), notify-Services, Summary an/aus+Zeit, `default_follow_up_days` (+7d), `project_clarify_on_new_task` (an/aus), Level-Cap (Gamification später)
 - [ ] H2 Validierung, H3 Options-Änderung live (reload?
 
 ### I. Frontend (Cards)
